@@ -165,3 +165,5 @@ select.mini {
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 .link-btn { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; border-bottom: 1px dashed var(--faint); text-align: left; }
 .link-btn:hover { border-bottom-color: var(--teal); }
+.sources__note .warn { color: var(--coral); }
+select.mini.warn { border-color: var(--coral); }
