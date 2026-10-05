@@ -175,3 +175,5 @@ select.mini.warn { border-color: var(--coral); }
 a.thumb:hover img { transform: scale(1.05); }
 .thumb--empty { background: repeating-linear-gradient(135deg, var(--panel), var(--panel) 6px, var(--bg) 6px, var(--bg) 12px); }
 @media (max-width: 680px) { .vids .thumb-cell { width: 92px; } .thumb { width: 80px; } }
+
+.more-btn { display: block; margin: 12px auto 4px; }
