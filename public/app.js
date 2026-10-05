@@ -285,8 +285,9 @@ const COL_FIELDS = [
   ["country", true],
   ["continent", true],
   ["link", true],
+  ["thumb", true],
 ];
-const NONE_LABEL = { topic: "(không có)", vph: "(không có)", country: "(tự tìm từ tiêu đề)", continent: "(theo quốc gia)", link: "(không có)" };
+const NONE_LABEL = { topic: "(không có)", vph: "(không có)", country: "(tự tìm từ tiêu đề)", continent: "(theo quốc gia)", link: "(không có)", thumb: "(lấy theo link video)" };
 
 function renderSources() {
   els.sourceRows.innerHTML = state.files
@@ -414,7 +415,13 @@ function renderLibrary() {
             ? `<select class="mini" data-key="${esc(r.key)}" aria-label="Quốc gia"><option value="">${r.countryRaw ? `Theo file: ${esc(r.countryRaw)}` : "Tự tìm từ tiêu đề"}</option>${COUNTRY_OPTIONS.replace(`value="${r.override}"`, `value="${r.override}" selected`)}</select>`
             : `<button type="button" class="link-btn" data-edit-country="${esc(r.key)}" title="Bấm để sửa quốc gia">${esc(r.country)}</button>${mark}`;
         const color = state.topicColors.get(r.topicKey);
+        const fallback = r.key.startsWith("id:") ? `https://i.ytimg.com/vi/${r.key.slice(3)}/mqdefault.jpg` : "";
+        const img = r.thumb
+          ? `<img src="${esc(r.thumb)}" alt="" loading="lazy" decoding="async" width="128" height="72"${fallback && fallback !== r.thumb ? ` data-fallback="${esc(fallback)}"` : ""}>`
+          : "";
+        const thumbCell = img ? (href ? `<a class="thumb" href="${esc(href)}" target="_blank" rel="noopener" tabindex="-1">${img}</a>` : `<span class="thumb">${img}</span>`) : `<span class="thumb thumb--empty"></span>`;
         return `<tr>
+          <td class="thumb-cell">${thumbCell}</td>
           <td>${title}<span class="sub">${esc(r.channel)}${r.channel ? " · " : ""}${esc(r.source)} dòng ${r.row}</span></td>
           <td><span class="label">${color ? `<i style="background:${color};width:8px;height:8px;border-radius:2px;display:inline-block"></i> ` : ""}<span class="${r.topicKey === BLANK_TOPIC ? "muted" : ""}">${esc(r.topicLabel)}</span></span></td>
           <td>${countryCell}</td>
@@ -422,7 +429,7 @@ function renderLibrary() {
           <td class="num">${r.vph === null ? `<span class="muted">${esc(r.vphRaw || "–")}</span>` : fmt(r.vph)}</td>
         </tr>`;
       })
-      .join("") || `<tr><td colspan="5" class="muted">Không có video nào khớp.</td></tr>`;
+      .join("") || `<tr><td colspan="6" class="muted">Không có video nào khớp.</td></tr>`;
 }
 
 // ---------- tương tác ----------
@@ -513,6 +520,23 @@ els.filters.addEventListener("click", (e) => {
   const chip = e.target.closest(".fchip");
   if (chip) toggleSel(chip.dataset.dim, chip.dataset.key);
 });
+
+// Ảnh lỗi (link trong file hết hạn, video live đổi ảnh...): thử ảnh dự phòng theo ID video, vẫn lỗi thì để ô trống.
+els.libraryRows.addEventListener(
+  "error",
+  (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    if (img.dataset.fallback) {
+      img.src = img.dataset.fallback;
+      delete img.dataset.fallback;
+    } else {
+      img.closest(".thumb")?.classList.add("thumb--empty");
+      img.remove();
+    }
+  },
+  true
+);
 
 els.librarySearch.addEventListener("input", renderLibrary);
 els.reviewOnly.addEventListener("change", renderLibrary);
