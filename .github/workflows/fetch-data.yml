@@ -1,0 +1,59 @@
+name: Fetch YouTube Data
+
+on:
+  # Dán link mới trên web -> api/manage-videos.js commit videos.json -> chạy ngay.
+  push:
+    branches: [main]
+    paths: [videos.json]
+  # Nút "Cập nhật VPH ngay" trên web.
+  workflow_dispatch:
+  # Định kỳ 6 tiếng/lần để VPH được đo trên cửa sổ 6–24h (xem scripts/velocity.mjs).
+  # Lấy dữ liệu theo video rất rẻ (1 unit / 50 video) nên chạy dày vẫn dư quota.
+  schedule:
+    - cron: "17 */6 * * *"
+
+# Không cho 2 lần chạy chồng nhau (vd dán link 2 lần liên tiếp): lần sau xếp hàng chờ,
+# tránh 2 job cùng ghi public/data rồi đẩy lên bị xung đột.
+concurrency:
+  group: fetch-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch data
+        env:
+          # Ưu tiên YOUTUBE_API_KEYS (nhiều key, cách nhau dấu phẩy); không có thì dùng YOUTUBE_API_KEY.
+          YOUTUBE_API_KEYS: ${{ secrets.YOUTUBE_API_KEYS || secrets.YOUTUBE_API_KEY }}
+        run: node scripts/fetch-data.mjs
+
+      - name: Commit data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          if git diff --cached --quiet; then
+            echo "Không có thay đổi dữ liệu."
+            exit 0
+          fi
+          git commit -m "data: cập nhật số liệu video $(date -u +'%Y-%m-%d %H:%M') UTC"
+          # Trong lúc job chạy, có thể ai đó vừa dán thêm link (commit videos.json mới lên main).
+          # Rebase lên bản mới nhất rồi mới đẩy, thử lại vài lần.
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1
