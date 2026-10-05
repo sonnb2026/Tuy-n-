@@ -6,9 +6,9 @@
 //   - Quốc gia: lấy từ cột "Quốc gia" nếu file có; ô trống / file không có cột -> app tự tìm từ tiêu đề.
 //   - Châu lục: lấy từ cột "Châu lục" nếu file có; không có -> suy ra từ quốc gia.
 
-import { extractGeo, geoFromCodes, countryList, countryFromCell, COUNTRIES } from "./lib/geo.js";
-import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey } from "./lib/ingest.js";
-import { pivot, totals } from "./lib/pivot.js";
+import { extractGeo, geoFromCodes, countryList, countryFromCell, COUNTRIES } from "./lib/geo.js?v=7";
+import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey } from "./lib/ingest.js?v=7";
+import { pivot, totals } from "./lib/pivot.js?v=7";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -35,6 +35,7 @@ const els = {
   librarySearch: $("librarySearch"),
   reviewOnly: $("reviewOnly"),
   libraryRows: $("libraryRows"),
+  libraryMore: $("libraryMore"),
 };
 
 const BLANK_TOPIC = "__blank";
@@ -73,7 +74,9 @@ const state = {
   sort: { topic: { by: "sum", dir: "desc" }, country: { by: "sum", dir: "desc" }, continent: { by: "sum", dir: "desc" } },
   overrides: loadOverrides(),
   editingCountry: null,
+  libraryLimit: 100,
 };
+const PAGE = 100;
 let fileSeq = 0;
 
 // ---------- tiện ích ----------
@@ -285,9 +288,8 @@ const COL_FIELDS = [
   ["country", true],
   ["continent", true],
   ["link", true],
-  ["thumb", true],
 ];
-const NONE_LABEL = { topic: "(không có)", vph: "(không có)", country: "(tự tìm từ tiêu đề)", continent: "(theo quốc gia)", link: "(không có)", thumb: "(lấy theo link video)" };
+const NONE_LABEL = { topic: "(không có)", vph: "(không có)", country: "(tự tìm từ tiêu đề)", continent: "(theo quốc gia)", link: "(không có)" };
 
 function renderSources() {
   els.sourceRows.innerHTML = state.files
@@ -394,8 +396,8 @@ function renderLibrary() {
   if (els.reviewOnly.checked) recs = recs.filter((r) => SPECIAL_GEO.has(r.countryKey));
   if (q) recs = recs.filter((r) => `${r.title} ${r.channel} ${r.topicLabel}`.toLowerCase().includes(q));
   recs = [...recs].sort((a, b) => (b.vph ?? -1) - (a.vph ?? -1));
-  const LIMIT = 500;
-  els.libraryCount.textContent = `(${fmt(recs.length)}${recs.length > LIMIT ? `, hiện ${LIMIT} video VPH cao nhất` : ""})`;
+  const LIMIT = state.libraryLimit;
+  els.libraryCount.textContent = `(${fmt(recs.length)})`;
   COUNTRY_OPTIONS ??= countryList().map((c) => `<option value="${c.code}">${esc(c.name)}</option>`).join("");
 
   els.libraryRows.innerHTML =
@@ -415,9 +417,10 @@ function renderLibrary() {
             ? `<select class="mini" data-key="${esc(r.key)}" aria-label="Quốc gia"><option value="">${r.countryRaw ? `Theo file: ${esc(r.countryRaw)}` : "Tự tìm từ tiêu đề"}</option>${COUNTRY_OPTIONS.replace(`value="${r.override}"`, `value="${r.override}" selected`)}</select>`
             : `<button type="button" class="link-btn" data-edit-country="${esc(r.key)}" title="Bấm để sửa quốc gia">${esc(r.country)}</button>${mark}`;
         const color = state.topicColors.get(r.topicKey);
-        const fallback = r.key.startsWith("id:") ? `https://i.ytimg.com/vi/${r.key.slice(3)}/mqdefault.jpg` : "";
-        const img = r.thumb
-          ? `<img src="${esc(r.thumb)}" alt="" loading="lazy" decoding="async" width="128" height="72"${fallback && fallback !== r.thumb ? ` data-fallback="${esc(fallback)}"` : ""}>`
+        // Ảnh lấy thẳng theo ID video (ảnh 320x180 YouTube luôn có sẵn), không đọc cột thumbnail trong file.
+        const src = r.key.startsWith("id:") ? `https://i.ytimg.com/vi/${r.key.slice(3)}/mqdefault.jpg` : "";
+        const img = src
+          ? `<img src="${src}" alt="" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer" width="128" height="72">`
           : "";
         const thumbCell = img ? (href ? `<a class="thumb" href="${esc(href)}" target="_blank" rel="noopener" tabindex="-1">${img}</a>` : `<span class="thumb">${img}</span>`) : `<span class="thumb thumb--empty"></span>`;
         return `<tr>
@@ -430,6 +433,10 @@ function renderLibrary() {
         </tr>`;
       })
       .join("") || `<tr><td colspan="6" class="muted">Không có video nào khớp.</td></tr>`;
+  // Chỉ vẽ 100 dòng mỗi lần cho nhẹ; bấm "Hiện thêm" để xem tiếp.
+  const more = recs.length - LIMIT;
+  els.libraryMore.hidden = more <= 0;
+  if (more > 0) els.libraryMore.textContent = `Hiện thêm ${fmt(Math.min(PAGE, more))} video (còn ${fmt(more)})`;
 }
 
 // ---------- tương tác ----------
@@ -486,6 +493,7 @@ window.addEventListener("drop", (e) => {
 });
 
 function toggleSel(dim, key) {
+  state.libraryLimit = PAGE;
   const s = state.sel[dim];
   s.has(key) ? s.delete(key) : s.add(key);
   render();
@@ -521,25 +529,35 @@ els.filters.addEventListener("click", (e) => {
   if (chip) toggleSel(chip.dataset.dim, chip.dataset.key);
 });
 
-// Ảnh lỗi (link trong file hết hạn, video live đổi ảnh...): thử ảnh dự phòng theo ID video, vẫn lỗi thì để ô trống.
+// Ảnh lỗi (video đã bị xoá / riêng tư): để ô trống có sọc.
 els.libraryRows.addEventListener(
   "error",
   (e) => {
     const img = e.target;
     if (!(img instanceof HTMLImageElement)) return;
-    if (img.dataset.fallback) {
-      img.src = img.dataset.fallback;
-      delete img.dataset.fallback;
-    } else {
-      img.closest(".thumb")?.classList.add("thumb--empty");
+    {
+      const box = img.closest(".thumb");
+      if (box) {
+        box.classList.add("thumb--empty");
+        box.title = `Không tải được ảnh: ${img.src}`;
+      }
       img.remove();
     }
   },
   true
 );
 
-els.librarySearch.addEventListener("input", renderLibrary);
-els.reviewOnly.addEventListener("change", renderLibrary);
+// Đổi tìm kiếm / bộ lọc -> quay về 100 dòng đầu.
+const resetLibrary = () => {
+  state.libraryLimit = PAGE;
+  renderLibrary();
+};
+els.librarySearch.addEventListener("input", resetLibrary);
+els.reviewOnly.addEventListener("change", resetLibrary);
+els.libraryMore.addEventListener("click", () => {
+  state.libraryLimit += PAGE;
+  renderLibrary();
+});
 els.libraryRows.addEventListener("click", (e) => {
   const b = e.target.closest("[data-edit-country]");
   if (!b) return;
