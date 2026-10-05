@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="description" content="Phân tích VPH video YouTube theo tuyến đề, quốc gia và châu lục." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='72' font-size='70' text-anchor='middle'%3E%F0%9F%A7%AD%3C/text%3E%3C/svg%3E" />
+<title>Phân tích tuyến đề</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="top">
+  <div class="top__title">
+    <h1>Phân tích tuyến đề</h1>
+    <p class="top__sub">Dán link video, app tự đọc số liệu, xếp tuyến đề, quốc gia, châu lục và cộng VPH.</p>
+  </div>
+  <div class="top__meta">
+    <div class="stat"><span class="stat__label">Tổng VPH</span><span class="stat__value" id="statVph">–</span></div>
+    <div class="stat"><span class="stat__label">Video</span><span class="stat__value" id="statVideos">–</span></div>
+    <div class="stat"><span class="stat__label">Quốc gia</span><span class="stat__value" id="statCountries">–</span></div>
+    <div class="stat"><span class="stat__label">Cập nhật</span><span class="stat__value" id="statUpdated">–</span></div>
+    <button type="button" class="btn btn--ghost" id="refreshBtn" title="Chạy lấy dữ liệu ngay, không đợi lịch 6 tiếng/lần">Cập nhật VPH ngay</button>
+  </div>
+</header>
+
+<main>
+  <section class="intake" aria-labelledby="intakeTitle">
+    <label id="intakeTitle" for="linksInput" class="intake__label">Link video</label>
+    <div class="intake__row">
+      <textarea id="linksInput" rows="3" spellcheck="false"
+        placeholder="Dán 1 hoặc nhiều link YouTube, mỗi link 1 dòng (watch?v=…, youtu.be/…, shorts/… đều được)"></textarea>
+      <button type="button" class="btn btn--primary" id="addBtn">Thêm và phân tích</button>
+    </div>
+    <p class="intake__status" id="intakeStatus" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="share" aria-label="Tỷ trọng VPH theo tuyến đề">
+    <div class="share__bar" id="shareBar"></div>
+    <div class="share__legend" id="shareLegend"></div>
+  </section>
+
+  <section class="board">
+    <div class="board__controls">
+      <div class="control">
+        <label for="sortKey">Sắp xếp theo</label>
+        <select id="sortKey">
+          <option value="topic">Tuyến đề</option>
+          <option value="vph">Sum of VPH</option>
+          <option value="country">Quốc gia</option>
+          <option value="continent">Châu lục</option>
+        </select>
+      </div>
+      <div class="segmented" role="group" aria-label="Chiều sắp xếp">
+        <button type="button" data-dir="asc" class="is-active">Tăng dần</button>
+        <button type="button" data-dir="desc">Giảm dần</button>
+      </div>
+    </div>
+
+    <div class="dims" id="dimBar"></div>
+
+    <div class="table-wrap">
+      <table class="grid" id="grid">
+        <thead><tr id="gridHead"></tr></thead>
+        <tbody id="gridBody"></tbody>
+        <tfoot id="gridFoot"></tfoot>
+      </table>
+    </div>
+    <p class="board__note">Bấm vào 1 dòng để xem các video bên trong và sửa phân loại nếu app xếp sai.
+      <span class="mark mark--approx">~</span> VPH tạm tính (video mới thêm, chưa đủ 6 tiếng để đo tốc độ thật).
+      <span class="mark mark--warn">?</span> Tiêu đề giáp ranh giữa 2 tuyến, nên kiểm tra lại.</p>
+  </section>
+
+  <details class="library" id="library">
+    <summary>Danh sách video đã nhập <span id="libraryCount"></span></summary>
+    <div class="library__tools">
+      <input type="search" id="librarySearch" placeholder="Tìm theo tiêu đề, kênh, quốc gia" />
+    </div>
+    <ul class="library__list" id="libraryList"></ul>
+  </details>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
