@@ -30,7 +30,7 @@ const CASES = [
 
   ["La vida real en la India: ¿Cómo viven las mujeres en el país más poblado del mundo? – Documental", "t3", "IN"],
   ["IRÁN: Mujeres Hermosas y una Vida Imposible Bajo las Sanciones Más Duras del Mundo! Documental", "t3", "IR"],
-  ["Así es la Vida Real en los Países con Más Mujeres Solteras del Mundo ¿Cómo Viven Realmente?", "t3", "UNK"],
+  ["Así es la Vida Real en los Países con Más Mujeres Solteras del Mundo ¿Cómo Viven Realmente?", "t3", "WW"],
   ["AQUÍ SE COMPRAN Y VENDEN MUJERES POR 20 CABRAS: LA ALDEA DE REFUGIADOS MÁS POBRE: CONGO DEMOCRÁTICO", "t3", "CD"],
   ["POBREZA EXTREMA, PELIGRO Y TRABAJADORAS: EL BARRIO CON MALA REPUTACIÓN DE UGANDA 🇺🇬 - DOCUMENTAL", "t3", "UG"],
 
@@ -39,8 +39,8 @@ const CASES = [
   ["50.000 Viven Aisladas En Medio Del Atlántico — Son Ricas, Pero Viven Como En La Época Vikinga", "t4", "UNK"],
   ["Vida en IRÁN Cómo Vive la Gente en el País MÁS Sancionado del Mundo - Documental de viajes", "t4", "IR"],
 
-  ["Los 10 PEORES Y MÁS PELIGROSOS Lugares del Mundo para Vivir (y Por Qué Nadie se Va)", "t5", "UNK"],
-  ["La Verdad Detrás de los 12 Lugares Turísticos Más Famosos del Mundo (y Por Qué Decepcionan) | 4K", "t5", "UNK"],
+  ["Los 10 PEORES Y MÁS PELIGROSOS Lugares del Mundo para Vivir (y Por Qué Nadie se Va)", "t5", "WW"],
+  ["La Verdad Detrás de los 12 Lugares Turísticos Más Famosos del Mundo (y Por Qué Decepcionan) | 4K", "t5", "WW"],
   ["La Vida Real en Tailandia: Las Aldeas Pobres del Norte Donde los Turistas Nunca Ponen un Pie", "t5", "TH"],
   ["Vida Real en TAILANDIA: Barrios Brutales, Vida Nocturna Oculta y Tradiciones Ancestrales!-Documental", "t5", "TH"],
   ["El INFIERNO MÁS CAÓTICO DEL MUNDO en la TIERRA – ¡Te ARREPENTIRÁS de Ver Esto! - Documental", "t5", "UNK"],
@@ -54,6 +54,28 @@ for (const [title, topic, country] of CASES) {
   });
 }
 
+test("tiếng Bồ Đào Nha / Pháp", () => {
+  assert.equal(extractGeo({ title: "Vida Real na ALEMANHA: País Rico" }).country, "Germany");
+  assert.equal(extractGeo({ title: "O Lado Sombrio Da CORÉIA DO SUL" }).country, "South Korea");
+  assert.equal(extractGeo({ title: "LA VRAIE VIE au SURINAME : le seul pays d’AMÉRIQUE DU SUD" }).country, "Suriname");
+  assert.equal(run("COMO VIVEM HOJE AS TRIBOS ISOLADAS DA AMAZÔNIA?").topic, "t4");
+});
+test("'mujeres bellas' câu khách -> Du lịch, thân phận phụ nữ -> Tuyến 3", () => {
+  assert.equal(run("Vivir En CHIPRE! Tierra De Mujeres Deslumbrantes Y Paisajes Impactantes - Documental De Viajes").topic, "t5");
+  assert.equal(run("Vivir En SERBIA! Mujeres Hermosas… Pero Atrapadas En Reglas Invisibles - Documental de Viajes").topic, "t3");
+  assert.equal(run("😱 La Tribu Sin VERGÜENZA Que La Televisión No muestra y sus mujeres Bellas").topic, "t4");
+});
+test("Châu Mỹ gộp + Worldwide", () => {
+  assert.equal(extractGeo({ title: "Vida en Perú" }).continent, "Châu Mỹ");
+  assert.equal(extractGeo({ title: "Vida en México" }).continent, "Châu Mỹ");
+  assert.equal(extractGeo({ title: "Los 9 Países MÁS SEGUROS para Vivir" }).country, "Worldwide");
+});
+test("nhiều nước: chỉ 'Multiple' khi nối trực tiếp, còn lại lấy nước được nhắc đầu tiên", () => {
+  assert.equal(extractGeo({ title: "Vida en VENEZUELA Y NICARAGUA! ¿Cómo sobrevivir?" }).country, "Multiple countries");
+  assert.equal(extractGeo({ title: "La vida real en COREA DEL NORTE, donde HASTA EE.UU. se siente inquieto" }).country, "North Korea");
+  assert.equal(extractGeo({ title: "Así Es La Vida En OMÁN, La Suiza Del Mundo Árabe" }).country, "Oman");
+  assert.equal(extractGeo({ title: "Así es la VIDA REAL en SUIZA: cómo se gana $6.500 al mes" }).country, "Switzerland");
+});
 test("không có tín hiệu -> Chưa phân loại", () => {
   assert.equal(run("Así es la vida en Japón").topic, "t0");
 });
