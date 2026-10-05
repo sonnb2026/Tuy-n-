@@ -25,6 +25,10 @@ const VPH_EXACT = ["view/gio", "vph", "views per hour", "viewsperhour", "view / 
 const VPH_CONTAINS = ["view/gio", "vph", "per hour", "/gio", "/hour"];
 const LINK_EXACT = ["link video", "url", "link", "video url", "video link", "video id", "videoid"];
 const CHANNEL_EXACT = ["kenh", "channel", "ten kenh", "channel title"];
+const TOPIC_EXACT = ["tuyen de", "tuyen", "chu de", "topic", "nhom de tai", "de tai", "tuyen noi dung"];
+const TOPIC_CONTAINS = ["tuyen de", "chu de", "topic"];
+const COUNTRY_EXACT = ["quoc gia", "country", "nuoc", "ten nuoc"];
+const CONTINENT_EXACT = ["chau luc", "continent", "luc dia"];
 
 function pick(headers, exact, contains = [], exclude = []) {
   const h = headers.map(norm);
@@ -60,6 +64,9 @@ export function detectColumns(headers, rows) {
   let vph = pick(headers, VPH_EXACT, VPH_CONTAINS);
   const link = pick(headers, LINK_EXACT, ["link video", "youtube"]);
   const channel = pick(headers, CHANNEL_EXACT);
+  const topic = pick(headers, TOPIC_EXACT, TOPIC_CONTAINS, ["link", "count", "sum"]);
+  const country = pick(headers, COUNTRY_EXACT, [], ["count", "sum"]);
+  const continent = pick(headers, CONTINENT_EXACT, [], ["count", "sum"]);
 
   // Không tìm được theo tên -> đoán theo nội dung.
   const sample = rows.slice(0, 200);
@@ -91,7 +98,7 @@ export function detectColumns(headers, rows) {
     });
     vph = best;
   }
-  return { title, vph, link, channel };
+  return { title, vph, link, channel, topic, country, continent };
 }
 
 // Số trong ô: số thật giữ nguyên; chuỗi thì xử lý "1.234" / "1,234" (dấu ngăn hàng nghìn),
@@ -115,6 +122,11 @@ export function videoKey(link, title) {
   if (/^[A-Za-z0-9_-]{11}$/.test(String(link || "").trim())) return "id:" + String(link).trim();
   return "t:" + norm(title);
 }
+
+// Nhãn nhóm lấy từ file: bỏ khoảng trắng thừa ở đầu/cuối/giữa ("Du Lịch " = "Du Lịch").
+export const cleanLabel = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
+// Khoá gộp nhóm: không phân biệt hoa/thường, giống Pivot Table của Excel ("DU LỊCH" = "Du lịch").
+export const labelKey = (v) => cleanLabel(v).toLocaleLowerCase("vi");
 
 // Dòng tổng ở cuối bảng ("Tổng cộng", "Grand Total") không phải video.
 const TOTAL_ROW = /^(tong cong|tong|grand total|total|sum)$/;
@@ -145,6 +157,9 @@ export function buildRecords(aoa, headerRow, cols, { source = "" } = {}) {
       title,
       link,
       channel: cols.channel >= 0 ? String(row[cols.channel] ?? "").trim() : "",
+      topicRaw: cols.topic >= 0 ? cleanLabel(row[cols.topic]) : "",
+      countryRaw: cols.country >= 0 ? cleanLabel(row[cols.country]) : "",
+      continentRaw: cols.continent >= 0 ? cleanLabel(row[cols.continent]) : "",
       vph: parseNumber(rawVph),
       vphRaw: rawVph,
       source,
