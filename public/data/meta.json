@@ -1,1 +1,52 @@
-{}
+{
+  "lastUpdated": "2026-10-05T12:39:07.652Z",
+  "inputCount": 30,
+  "videoCount": 0,
+  "notFound": [],
+  "quotaUnitsUsed": 3,
+  "apiKeysConfigured": 1,
+  "allKeysExhausted": false,
+  "vph": {
+    "minIntervalHours": 6,
+    "windowMaxHours": 24,
+    "fallbackMaxHours": 48,
+    "maxSnapshots": 8
+  },
+  "errors": [
+    {
+      "videoIds": [
+        "GBSo93WUgqY",
+        "xHb4lpATffw",
+        "bAy6Zfafjqw",
+        "JMZJivOYXQY",
+        "csl7DICqOQY",
+        "wOApsa958jk",
+        "8pwJO0FSoYw",
+        "KBPAvI3hZQA",
+        "45tI0cPDEKk",
+        "3GzLVGiUEZ4",
+        "UcMUdaqRsM4",
+        "wvC8x3g73X0",
+        "2w9FwrEGYvg",
+        "axd06SphmtI",
+        "52C6sMl2p4k",
+        "OO_EiVdG3i8",
+        "CKrh76gQzag",
+        "Q1QuB5rDJeQ",
+        "h_xIDlsEFyg",
+        "j2RYIAmx8yk",
+        "Ne2qSgC1yvs",
+        "khxdPKN4DWQ",
+        "n6JTjC3J4fc",
+        "APcUQ9xpR80",
+        "R5nEfxybCew",
+        "k5cpt0xnoEg",
+        "uyXBt5o6AAc",
+        "a38gYKPrq2Q",
+        "GQydMDDVNnY",
+        "wWsCc35vcq4"
+      ],
+      "error": "videos failed: forbidden"
+    }
+  ]
+}
