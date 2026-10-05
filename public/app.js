@@ -1,11 +1,13 @@
 // public/app.js
 //
-// Đọc file Excel/CSV ngay trên trình duyệt (SheetJS), xếp tuyến đề + quốc gia + châu lục cho từng
-// video (public/lib/topics.js, geo.js), rồi dựng 3 bảng tổng hợp kiểu Pivot Table nằm cạnh nhau.
+// Đọc file Excel/CSV ngay trên trình duyệt (SheetJS) rồi dựng 3 bảng tổng hợp kiểu Pivot Table
+// nằm cạnh nhau: Tuyến đề · Quốc gia · Châu lục, mỗi bảng có Sum of VPH và COUNTA.
+//   - Tuyến đề: LẤY TỪ CỘT TRONG FILE (người dùng tự điền), gộp nhóm giống Pivot Table của Excel.
+//   - Quốc gia: lấy từ cột "Quốc gia" nếu file có; ô trống / file không có cột -> app tự tìm từ tiêu đề.
+//   - Châu lục: lấy từ cột "Châu lục" nếu file có; không có -> suy ra từ quốc gia.
 
-import { TOPICS, TOPIC_BY_ID, topicLabel, classifyTopic } from "./lib/topics.js";
-import { extractGeo, geoFromCodes, countryList, COUNTRIES } from "./lib/geo.js";
-import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet } from "./lib/ingest.js";
+import { extractGeo, geoFromCodes, countryList, countryFromCell, COUNTRIES } from "./lib/geo.js";
+import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey } from "./lib/ingest.js";
 import { pivot, totals } from "./lib/pivot.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +22,8 @@ const els = {
   sources: $("sources"),
   sourceRows: $("sourceRows"),
   sourceNote: $("sourceNote"),
+  onlyTopic: $("onlyTopic"),
+  onlyTopicWrap: $("onlyTopicWrap"),
   dedupe: $("dedupe"),
   clearBtn: $("clearBtn"),
   dropError: $("dropError"),
@@ -33,33 +37,38 @@ const els = {
   libraryRows: $("libraryRows"),
 };
 
+const BLANK_TOPIC = "__blank";
+const PALETTE = ["#ffd166", "#ff7a52", "#f472b6", "#4ade80", "#22d3ee", "#a78bfa", "#fb923c", "#38bdf8", "#facc15", "#34d399", "#f87171", "#c084fc", "#2dd4bf", "#fda4af", "#93c5fd", "#bef264"];
+const SPECIAL_GEO = new Set(["UNK", "MULTI", "WW"]);
+
 const DIMS = {
   topic: {
     title: "Tuyến đề",
-    key: (r) => r.topic,
-    label: (r) => topicLabel(r.topic),
-    color: (key) => TOPIC_BY_ID[key]?.color,
-    special: (key) => key === "t0",
-    order: (a, b) => (TOPIC_BY_ID[a.key]?.no ?? 99) - (TOPIC_BY_ID[b.key]?.no ?? 99),
+    key: (r) => r.topicKey,
+    label: (r) => r.topicLabel,
+    special: (key) => key === BLANK_TOPIC,
   },
   country: {
     title: "Quốc gia",
-    key: (r) => r.geo.countryCode,
-    label: (r) => r.geo.country,
-    special: (key) => key === "UNK" || key === "MULTI" || key === "WW",
+    key: (r) => r.countryKey,
+    label: (r) => r.country,
+    special: (key) => SPECIAL_GEO.has(key),
   },
   continent: {
     title: "Châu lục",
-    key: (r) => r.geo.continentCode,
-    label: (r) => r.geo.continent,
-    special: (key) => key === "UNK" || key === "MULTI" || key === "WW",
+    key: (r) => r.continentKey,
+    label: (r) => r.continent,
+    special: (key) => SPECIAL_GEO.has(key),
   },
 };
 
 const state = {
-  files: [], // { id, name, wb, sheet, aoa, headerRow, headers, cols, records, skipped, error }
-  records: [], // đã gộp trùng + phân loại
+  files: [],
+  records: [],
+  excludedNoTopic: 0,
   duplicates: 0,
+  hasTopicCol: false,
+  topicColors: new Map(),
   sel: { topic: new Set(), country: new Set(), continent: new Set() },
   sort: { topic: { by: "sum", dir: "desc" }, country: { by: "sum", dir: "desc" }, continent: { by: "sum", dir: "desc" } },
   overrides: loadOverrides(),
@@ -80,14 +89,14 @@ const colLetter = (i) => {
 
 function loadOverrides() {
   try {
-    return JSON.parse(localStorage.getItem("tuyende:overrides") || "{}") || {};
+    return JSON.parse(localStorage.getItem("tuyende:country-overrides") || "{}") || {};
   } catch {
     return {};
   }
 }
 function saveOverrides() {
   try {
-    localStorage.setItem("tuyende:overrides", JSON.stringify(state.overrides));
+    localStorage.setItem("tuyende:country-overrides", JSON.stringify(state.overrides));
   } catch {
     // trình duyệt chặn bộ nhớ -> sửa tay chỉ giữ trong phiên này
   }
@@ -113,13 +122,17 @@ async function addFiles(fileList) {
   for (const file of fileList) {
     try {
       const isText = /\.(csv|txt)$/i.test(file.name);
-      // CSV đọc dạng chữ UTF-8 để giữ đúng tiếng Việt / Tây Ban Nha; raw = không tự đổi sang ngày tháng.
       const wb = isText
         ? XLSX.read(await readAs(file, "text"), { type: "string", raw: true })
         : XLSX.read(await readAs(file, "buffer"), { type: "array" });
       const entry = { id: ++fileSeq, name: file.name, wb };
-      // Nhiều sheet: chọn sheet trông giống bảng video nhất.
-      const scored = wb.SheetNames.map((n) => ({ n, s: scoreSheet(sheetAoa(wb, n)) }));
+      // Nhiều sheet: ưu tiên sheet có cột Tuyến đề, rồi tới sheet giống bảng video nhất.
+      const scored = wb.SheetNames.map((n) => {
+        const aoa = sheetAoa(wb, n);
+        const h = findHeaderRow(aoa);
+        const cols = detectColumns((aoa[h] || []).map(String), aoa.slice(h + 1));
+        return { n, s: scoreSheet(aoa) + (cols.topic >= 0 ? 3 : 0) };
+      });
       const best = scored.reduce((a, b) => (b.s > a.s ? b : a), scored[0]);
       loadSheet(entry, best.n);
       state.files.push(entry);
@@ -145,21 +158,43 @@ function loadSheet(entry, sheetName) {
   entry.cols = detectColumns(entry.headers, entry.aoa.slice(entry.headerRow + 1));
 }
 
-// ---------- phân loại ----------
-function classify(rec) {
-  const ov = state.overrides[rec.key] || null;
-  const autoGeo = extractGeo({ title: rec.title });
-  const geo = ov?.country && COUNTRIES[ov.country] ? geoFromCodes([ov.country], "override") : autoGeo;
-  const auto = classifyTopic(rec.title, geo);
-  const topic = ov?.topic && TOPIC_BY_ID[ov.topic] ? ov.topic : auto.topic;
+// ---------- gán nhóm cho từng video ----------
+function withGroups(rec, topicLabels) {
+  // Tuyến đề: đúng chữ trong file. Gộp không phân biệt hoa/thường; tên nhóm = cách viết gặp đầu tiên.
+  const topicKey = rec.topicRaw ? labelKey(rec.topicRaw) : BLANK_TOPIC;
+  const topicLabel = rec.topicRaw ? topicLabels.get(topicKey) : "(trống)";
+
+  // Quốc gia: sửa tay > ô trong file > tự tìm từ tiêu đề.
+  let geo;
+  let countrySource;
+  const ov = state.overrides[rec.key];
+  if (ov && COUNTRIES[ov]) {
+    geo = geoFromCodes([ov], "override");
+    countrySource = "override";
+  } else if (rec.countryRaw) {
+    const code = countryFromCell(rec.countryRaw);
+    geo = code
+      ? geoFromCodes([code], "file")
+      : { countryCode: "file:" + labelKey(rec.countryRaw), country: rec.countryRaw, continentCode: "UNK", continent: "Không xác định", source: "file" };
+    countrySource = "file";
+  } else {
+    geo = extractGeo({ title: rec.title });
+    countrySource = "title";
+  }
+  // Châu lục: ô trong file nếu có, không thì theo quốc gia.
+  const continentKey = rec.continentRaw ? "file:" + labelKey(rec.continentRaw) : geo.continentCode;
+  const continent = rec.continentRaw || geo.continent;
+
   return {
     ...rec,
-    geo,
-    autoGeo,
-    topic,
-    auto,
-    override: ov,
-    needsReview: !ov?.topic && auto.confidence === "low" && auto.topic !== "t0",
+    topicKey,
+    topicLabel,
+    countryKey: geo.countryCode,
+    country: geo.country,
+    continentKey,
+    continent,
+    countrySource,
+    override: ov || null,
   };
 }
 
@@ -176,6 +211,8 @@ function rebuild() {
     f.skipped = out.skipped;
     all.push(...out.records);
   }
+  state.hasTopicCol = state.files.some((f) => f.cols.topic >= 0);
+
   let records = all;
   state.duplicates = 0;
   if (els.dedupe.checked) {
@@ -183,17 +220,23 @@ function rebuild() {
     records = d.records;
     state.duplicates = d.duplicates;
   }
-  state.records = records.map(classify);
-  // Bỏ các lựa chọn lọc không còn tồn tại.
+  state.excludedNoTopic = 0;
+  if (state.hasTopicCol && els.onlyTopic.checked) {
+    const kept = records.filter((r) => r.topicRaw);
+    state.excludedNoTopic = records.length - kept.length;
+    records = kept;
+  }
+
+  // Tên nhóm tuyến đề = cách viết xuất hiện đầu tiên; màu cố định theo thứ tự xuất hiện.
+  const topicLabels = new Map();
+  for (const r of records) if (r.topicRaw && !topicLabels.has(labelKey(r.topicRaw))) topicLabels.set(labelKey(r.topicRaw), r.topicRaw);
+  for (const key of topicLabels.keys()) if (!state.topicColors.has(key)) state.topicColors.set(key, PALETTE[state.topicColors.size % PALETTE.length]);
+
+  state.records = records.map((r) => withGroups(r, topicLabels));
   for (const dim of Object.keys(DIMS)) {
     const keys = new Set(state.records.map(DIMS[dim].key));
     for (const k of state.sel[dim]) if (!keys.has(k)) state.sel[dim].delete(k);
   }
-  render();
-}
-
-function reclassify() {
-  state.records = state.records.map(classify);
   render();
 }
 
@@ -212,10 +255,10 @@ function sortRows(dim, rows) {
     if (by === "label") {
       const sa = D.special(a.key);
       const sb = D.special(b.key);
-      if (sa !== sb) return sa ? 1 : -1; // "Unknown" / "Chưa phân loại" luôn cuối
-      return s * (D.order ? D.order(a, b) : a.label.localeCompare(b.label, "en"));
+      if (sa !== sb) return sa ? 1 : -1; // "(trống)", "Unknown"... luôn nằm cuối
+      return s * a.label.localeCompare(b.label, "vi", { numeric: true });
     }
-    return s * (a[by] - b[by]) || b.sum - a.sum || a.label.localeCompare(b.label, "en");
+    return s * (a[by] - b[by]) || b.sum - a.sum || a.label.localeCompare(b.label, "vi");
   });
 }
 
@@ -224,6 +267,7 @@ function render() {
   const has = state.files.length > 0;
   els.dropEmpty.hidden = has;
   els.sources.hidden = !has;
+  els.onlyTopicWrap.hidden = !state.hasTopicCol;
   els.results.hidden = !state.records.length;
   els.topMeta.hidden = !state.records.length;
   renderSources();
@@ -234,12 +278,31 @@ function render() {
   renderLibrary();
 }
 
+const COL_FIELDS = [
+  ["topic", true],
+  ["title", false],
+  ["vph", true],
+  ["country", true],
+  ["continent", true],
+  ["link", true],
+];
+const NONE_LABEL = { topic: "(không có)", vph: "(không có)", country: "(tự tìm từ tiêu đề)", continent: "(theo quốc gia)", link: "(không có)" };
+
 function renderSources() {
   els.sourceRows.innerHTML = state.files
     .map((f) => {
-      const opts = (sel, allowNone) =>
-        (allowNone ? `<option value="-1"${sel === -1 ? " selected" : ""}>(không có)</option>` : "") +
-        f.headers.map((h, i) => `<option value="${i}"${i === sel ? " selected" : ""}>${esc(h)}</option>`).join("");
+      const select = (field, allowNone) => {
+        const sel = f.cols[field];
+        const none = allowNone
+          ? `<option value="-1"${sel === -1 ? " selected" : ""}>${NONE_LABEL[field]}</option>`
+          : sel < 0
+            ? `<option value="-1" selected>Chọn cột…</option>`
+            : "";
+        const warn = field === "topic" && sel < 0 ? " warn" : "";
+        return `<td><select class="mini${warn}" data-file="${f.id}" data-field="${field}">${none}${f.headers
+          .map((h, i) => `<option value="${i}"${i === sel ? " selected" : ""}>${esc(h)}</option>`)
+          .join("")}</select></td>`;
+      };
       const sheets =
         f.wb.SheetNames.length > 1
           ? `<select class="mini" data-file="${f.id}" data-field="sheet">${f.wb.SheetNames.map((n) => `<option${n === f.sheet ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>`
@@ -248,9 +311,7 @@ function renderSources() {
       return `<tr>
         <td class="fname" title="${esc(f.name)}">${esc(f.name)}</td>
         <td>${sheets}</td>
-        <td><select class="mini" data-file="${f.id}" data-field="title">${f.cols.title < 0 ? `<option value="-1" selected>Chọn cột…</option>` : ""}${opts(f.cols.title, false)}</select></td>
-        <td><select class="mini" data-file="${f.id}" data-field="vph">${opts(f.cols.vph, true)}</select></td>
-        <td><select class="mini" data-file="${f.id}" data-field="link">${opts(f.cols.link, true)}</select></td>
+        ${COL_FIELDS.map(([field, none]) => select(field, none)).join("")}
         <td class="num${n ? "" : " warn"}">${fmt(n)}</td>
         <td><button type="button" class="icon-btn" data-remove="${f.id}" title="Bỏ file này" aria-label="Bỏ file ${esc(f.name)}">✕</button></td>
       </tr>`;
@@ -258,20 +319,25 @@ function renderSources() {
     .join("");
 
   const notes = [];
-  const totalsSkipped = state.files.reduce((s, f) => s + (f.skipped?.total || 0), 0);
+  if (state.files.length && !state.hasTopicCol) {
+    notes.push(
+      'File chưa có cột "Tuyến đề": thêm 1 cột tên "Tuyến đề" vào file Excel rồi điền tuyến cho từng video, hoặc chọn cột chứa tuyến đề ở ô "Cột tuyến đề" phía trên.'
+    );
+  }
+  if (state.excludedNoTopic) notes.push(`Bỏ qua ${fmt(state.excludedNoTopic)} video chưa điền tuyến đề (bỏ tích "Chỉ tính video đã có tuyến đề" để tính cả).`);
   if (state.duplicates) notes.push(`Đã gộp ${fmt(state.duplicates)} dòng trùng video (giữ bản xuất hiện sau cùng).`);
+  const totalsSkipped = state.files.reduce((s, f) => s + (f.skipped?.total || 0), 0);
   if (totalsSkipped) notes.push(`Bỏ qua ${totalsSkipped} dòng "Tổng cộng".`);
   const noVph = state.records.filter((r) => r.vph === null).length;
-  if (noVph) notes.push(`${fmt(noVph)} video có ô VPH trống hoặc là chữ (vd "Live"): vẫn được đếm trong COUNTA nhưng không cộng vào SUM.`);
-  if (state.files.some((f) => f.cols.title < 0)) notes.push("Có file chưa xác định được cột tiêu đề, hãy chọn cột ở bảng trên.");
-  els.sourceNote.textContent = notes.join(" ");
+  if (noVph) notes.push(`${fmt(noVph)} video có ô VPH trống hoặc là chữ (vd "Sắp phát"): vẫn được đếm trong COUNTA nhưng không cộng vào SUM.`);
+  els.sourceNote.innerHTML = notes.map((n, i) => (i === 0 && !state.hasTopicCol ? `<span class="warn">${esc(n)}</span>` : esc(n))).join(" ");
 }
 
 function renderStats() {
   const recs = filtered(null);
   els.statVph.textContent = fmt(recs.reduce((s, r) => s + (r.vph ?? 0), 0));
   els.statVideos.textContent = fmt(recs.length);
-  els.statCountries.textContent = fmt(new Set(recs.map((r) => r.geo.countryCode).filter((c) => !DIMS.country.special(c))).size);
+  els.statCountries.textContent = fmt(new Set(recs.map((r) => r.countryKey).filter((c) => !SPECIAL_GEO.has(c))).size);
 }
 
 function renderFilters() {
@@ -302,12 +368,12 @@ function renderPivot(el, dim) {
   const body = rows.length
     ? rows
         .map((r) => {
-          const color = D.color?.(r.key);
+          const color = dim === "topic" && !D.special(r.key) ? state.topicColors.get(r.key) : null;
           const cls = [sel.has(r.key) ? "is-selected" : "", sel.size && !sel.has(r.key) ? "is-dim" : ""].join(" ");
           const missing = r.count - r.vphCount;
           return `<tr class="${cls}" data-key="${esc(r.key)}" tabindex="0" aria-pressed="${sel.has(r.key)}">
             <td><span class="label">${color ? `<i style="background:${color}"></i>` : ""}<span class="${D.special(r.key) ? "muted" : ""}">${esc(r.label)}</span></span></td>
-            <td class="num bar" style="--w:${((r.sum / max) * 100).toFixed(1)}"${missing ? ` title="${missing} video không có VPH"` : ""}>${fmt(r.sum)}</td>
+            <td class="num bar" style="--w:${((r.sum / max) * 100).toFixed(1)}"${missing ? ` title="${missing} video không có VPH là số"` : ""}>${fmt(r.sum)}</td>
             <td class="num">${fmt(r.count)}</td>
           </tr>`;
         })
@@ -324,8 +390,8 @@ let COUNTRY_OPTIONS = null;
 function renderLibrary() {
   const q = els.librarySearch.value.trim().toLowerCase();
   let recs = filtered(null);
-  if (els.reviewOnly.checked) recs = recs.filter((r) => r.needsReview);
-  if (q) recs = recs.filter((r) => `${r.title} ${r.channel}`.toLowerCase().includes(q));
+  if (els.reviewOnly.checked) recs = recs.filter((r) => SPECIAL_GEO.has(r.countryKey));
+  if (q) recs = recs.filter((r) => `${r.title} ${r.channel} ${r.topicLabel}`.toLowerCase().includes(q));
   recs = [...recs].sort((a, b) => (b.vph ?? -1) - (a.vph ?? -1));
   const LIMIT = 500;
   els.libraryCount.textContent = `(${fmt(recs.length)}${recs.length > LIMIT ? `, hiện ${LIMIT} video VPH cao nhất` : ""})`;
@@ -337,23 +403,22 @@ function renderLibrary() {
       .map((r) => {
         const href = r.key.startsWith("id:") ? `https://www.youtube.com/watch?v=${r.key.slice(3)}` : /^https?:/i.test(r.link) ? r.link : "";
         const title = href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(r.title)}</a>` : esc(r.title);
-        const topicSel = `<select class="mini${r.override?.topic ? " is-edited" : ""}" data-key="${esc(r.key)}" data-field="topic" aria-label="Tuyến đề">
-          <option value="">Tự động: ${esc(topicLabel(r.auto.topic))}</option>
-          ${TOPICS.filter((t) => t.id !== "t0").map((t) => `<option value="${t.id}"${r.override?.topic === t.id ? " selected" : ""}>${esc(topicLabel(t.id))}</option>`).join("")}
-        </select>`;
+        const mark =
+          r.countrySource === "override"
+            ? ` <span class="mark mark--edit">sửa</span>`
+            : r.countrySource === "title"
+              ? ` <span class="mark mark--warn" title="Tự tìm từ tiêu đề">≈</span>`
+              : "";
         const countryCell =
           state.editingCountry === r.key
-            ? `<select class="mini" data-key="${esc(r.key)}" data-field="country" aria-label="Quốc gia"><option value="">Tự động: ${esc(r.autoGeo.country)}</option>${COUNTRY_OPTIONS.replace(`value="${r.override?.country}"`, `value="${r.override?.country}" selected`)}</select>`
-            : `<button type="button" class="link-btn" data-edit-country="${esc(r.key)}" title="Bấm để sửa quốc gia">${esc(r.geo.country)}</button>`;
-        const marks = [
-          r.needsReview ? `<span class="mark mark--warn" title="Điểm các tuyến: ${esc(JSON.stringify(r.auto.scores))}">?</span>` : "",
-          r.override ? `<span class="mark mark--edit">sửa</span>` : "",
-        ].join(" ");
+            ? `<select class="mini" data-key="${esc(r.key)}" aria-label="Quốc gia"><option value="">${r.countryRaw ? `Theo file: ${esc(r.countryRaw)}` : "Tự tìm từ tiêu đề"}</option>${COUNTRY_OPTIONS.replace(`value="${r.override}"`, `value="${r.override}" selected`)}</select>`
+            : `<button type="button" class="link-btn" data-edit-country="${esc(r.key)}" title="Bấm để sửa quốc gia">${esc(r.country)}</button>${mark}`;
+        const color = state.topicColors.get(r.topicKey);
         return `<tr>
-          <td>${title} ${marks}<span class="sub">${esc(r.channel)}${r.channel ? " · " : ""}${esc(r.source)} dòng ${r.row}</span></td>
-          <td>${topicSel}</td>
+          <td>${title}<span class="sub">${esc(r.channel)}${r.channel ? " · " : ""}${esc(r.source)} dòng ${r.row}</span></td>
+          <td><span class="label">${color ? `<i style="background:${color};width:8px;height:8px;border-radius:2px;display:inline-block"></i> ` : ""}<span class="${r.topicKey === BLANK_TOPIC ? "muted" : ""}">${esc(r.topicLabel)}</span></span></td>
           <td>${countryCell}</td>
-          <td class="${DIMS.continent.special(r.geo.continentCode) ? "muted" : ""}">${esc(r.geo.continent)}</td>
+          <td class="${SPECIAL_GEO.has(r.continentKey) ? "muted" : ""}">${esc(r.continent)}</td>
           <td class="num">${r.vph === null ? `<span class="muted">${esc(r.vphRaw || "–")}</span>` : fmt(r.vph)}</td>
         </tr>`;
       })
@@ -370,10 +435,12 @@ els.fileInput.addEventListener("change", () => {
 });
 els.clearBtn.addEventListener("click", () => {
   state.files = [];
+  state.topicColors.clear();
   Object.values(state.sel).forEach((s) => s.clear());
   rebuild();
 });
 els.dedupe.addEventListener("change", rebuild);
+els.onlyTopic.addEventListener("change", rebuild);
 
 els.sourceRows.addEventListener("change", (e) => {
   const s = e.target.closest("select[data-file]");
@@ -391,7 +458,6 @@ els.sourceRows.addEventListener("click", (e) => {
   rebuild();
 });
 
-// Kéo thả file vào bất cứ đâu trên trang.
 let dragDepth = 0;
 window.addEventListener("dragenter", (e) => {
   if (![...(e.dataTransfer?.types || [])].includes("Files")) return;
@@ -412,7 +478,6 @@ window.addEventListener("drop", (e) => {
   if (e.dataTransfer?.files?.length) addFiles([...e.dataTransfer.files]);
 });
 
-// 3 bảng: bấm dòng = lọc chéo, bấm tiêu đề cột = sắp xếp.
 function toggleSel(dim, key) {
   const s = state.sel[dim];
   s.has(key) ? s.delete(key) : s.add(key);
@@ -456,26 +521,21 @@ els.libraryRows.addEventListener("click", (e) => {
   if (!b) return;
   state.editingCountry = b.dataset.editCountry;
   renderLibrary();
-  els.libraryRows.querySelector('select[data-field="country"]')?.focus();
+  els.libraryRows.querySelector("select[data-key]")?.focus();
 });
 els.libraryRows.addEventListener("change", (e) => {
   const s = e.target.closest("select[data-key]");
   if (!s) return;
-  const key = s.dataset.key;
-  const ov = { ...(state.overrides[key] || {}) };
-  if (s.value) ov[s.dataset.field] = s.value;
-  else delete ov[s.dataset.field];
-  if (Object.keys(ov).length) state.overrides[key] = ov;
-  else delete state.overrides[key];
+  if (s.value) state.overrides[s.dataset.key] = s.value;
+  else delete state.overrides[s.dataset.key];
   saveOverrides();
   state.editingCountry = null;
-  reclassify();
+  rebuild();
 });
 
 // ---------- xuất Excel ----------
 els.exportBtn.addEventListener("click", () => {
   if (typeof XLSX === "undefined") return alert("Không tải được thư viện Excel, kiểm tra mạng rồi thử lại.");
-  // Sheet 1: 3 bảng tổng hợp đặt cạnh nhau, cách nhau 1 cột trống - đúng như trên màn hình (kể cả bộ lọc).
   const blocks = Object.keys(DIMS).map((dim) => {
     const D = DIMS[dim];
     const rows = sortRows(dim, pivot(filtered(dim), D.key, D.label));
@@ -487,26 +547,25 @@ els.exportBtn.addEventListener("click", () => {
     blocks.flatMap((b, j) => [...(b[i] || ["", "", ""]), ...(j < blocks.length - 1 ? [""] : [])])
   );
   const detail = [
-    ["Video", "Link video", "Kênh", "VPH", "Tuyến đề", "Quốc gia", "Châu lục", "Cần kiểm tra", "Sửa tay", "File", "Dòng"],
+    ["Video", "Link video", "Kênh", "VPH", "Tuyến đề", "Quốc gia", "Châu lục", "Nguồn quốc gia", "File", "Dòng"],
     ...filtered(null).map((r) => [
       r.title,
       r.key.startsWith("id:") ? `https://www.youtube.com/watch?v=${r.key.slice(3)}` : r.link,
       r.channel,
       r.vph ?? r.vphRaw ?? "",
-      topicLabel(r.topic),
-      r.geo.country,
-      r.geo.continent,
-      r.needsReview ? "?" : "",
-      r.override ? "x" : "",
+      r.topicKey === BLANK_TOPIC ? "" : r.topicLabel,
+      r.country,
+      r.continent,
+      { file: "Theo file", title: "Tự tìm từ tiêu đề", override: "Sửa tay" }[r.countrySource],
       r.source,
       r.row,
     ]),
   ];
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(summary);
-  ws1["!cols"] = [34, 13, 18, 3, 24, 13, 18, 3, 18, 13, 18].map((wch) => ({ wch }));
+  ws1["!cols"] = [30, 13, 18, 3, 24, 13, 18, 3, 18, 13, 18].map((wch) => ({ wch }));
   const ws2 = XLSX.utils.aoa_to_sheet(detail);
-  ws2["!cols"] = [60, 44, 22, 10, 34, 20, 16, 12, 8, 24, 6].map((wch) => ({ wch }));
+  ws2["!cols"] = [60, 44, 22, 10, 28, 20, 16, 18, 24, 6].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp");
   XLSX.utils.book_append_sheet(wb, ws2, "Chi tiết");
   XLSX.writeFile(wb, `phan-tich-tuyen-de-${new Date().toISOString().slice(0, 10)}.xlsx`);
