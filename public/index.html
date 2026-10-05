@@ -17,7 +17,7 @@
 <header class="top">
   <div class="top__title">
     <h1>Phân tích tuyến đề</h1>
-    <p class="top__sub">Đưa file dữ liệu video vào, app tự xếp tuyến đề, tìm quốc gia và châu lục từ tiêu đề, rồi cộng VPH.</p>
+    <p class="top__sub">Đưa file dữ liệu video có cột Tuyến đề vào, app gộp nhóm theo tuyến đề, quốc gia, châu lục và tính Sum of VPH, COUNTA.</p>
   </div>
   <div class="top__meta" id="topMeta" hidden>
     <div class="stat"><span class="stat__label">Sum of VPH</span><span class="stat__value" id="statVph">–</span></div>
@@ -32,19 +32,20 @@
     <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv,.txt" multiple hidden />
     <div class="drop__empty" id="dropEmpty">
       <p class="drop__title">Kéo thả file Excel hoặc CSV vào đây</p>
-      <p class="drop__hint">Dùng được file "Xuất Excel" của app theo dõi kênh. Chọn nhiều file cùng lúc thì app gộp lại và bỏ video trùng. File chỉ được đọc trên máy bạn, không gửi lên đâu cả.</p>
+      <p class="drop__hint">File cần có cột <b>Tuyến đề</b> (bạn tự điền), cột tiêu đề video và cột View/giờ, như file "Xuất Excel" của app theo dõi kênh có thêm cột Tuyến đề. Chọn nhiều file cùng lúc thì app gộp lại và bỏ video trùng. File chỉ được đọc trên máy bạn, không gửi lên đâu cả.</p>
       <button type="button" class="btn btn--primary" data-pick>Chọn file</button>
     </div>
     <div class="sources" id="sources" hidden>
       <div class="sources__head">
         <span class="sources__title">Nguồn dữ liệu</span>
+        <label class="check" id="onlyTopicWrap"><input type="checkbox" id="onlyTopic" checked /> Chỉ tính video đã có tuyến đề</label>
         <label class="check"><input type="checkbox" id="dedupe" checked /> Gộp video trùng</label>
         <button type="button" class="btn btn--small" data-pick>Thêm file</button>
         <button type="button" class="btn btn--small btn--ghost" id="clearBtn">Xoá hết</button>
       </div>
       <div class="table-scroll">
         <table class="src">
-          <thead><tr><th>File</th><th>Sheet</th><th>Cột tiêu đề</th><th>Cột VPH</th><th>Cột link</th><th class="num" title="Số dòng video đọc được trong file, trước khi gộp trùng">Dòng</th><th></th></tr></thead>
+          <thead><tr><th>File</th><th>Sheet</th><th>Cột tuyến đề</th><th>Cột tiêu đề</th><th>Cột VPH</th><th>Cột quốc gia</th><th>Cột châu lục</th><th>Cột link</th><th class="num" title="Số dòng video đọc được trong file, trước khi gộp trùng">Dòng</th><th></th></tr></thead>
           <tbody id="sourceRows"></tbody>
         </table>
       </div>
@@ -66,7 +67,7 @@
       <summary>Danh sách video <span id="libraryCount"></span></summary>
       <div class="library__tools">
         <input type="search" id="librarySearch" placeholder="Tìm theo tiêu đề hoặc kênh" />
-        <label class="check"><input type="checkbox" id="reviewOnly" /> Chỉ video cần kiểm tra</label>
+        <label class="check"><input type="checkbox" id="reviewOnly" /> Chỉ video chưa có quốc gia</label>
       </div>
       <div class="table-scroll table-scroll--tall">
         <table class="vids">
@@ -74,8 +75,8 @@
           <tbody id="libraryRows"></tbody>
         </table>
       </div>
-      <p class="note"><span class="mark mark--warn">?</span> tiêu đề giáp ranh giữa 2 tuyến, nên xem lại.
-        <span class="mark mark--edit">sửa</span> đã sửa tay. Sửa bằng ô chọn ngay trong bảng, lưu trên trình duyệt này.</p>
+      <p class="note"><span class="mark mark--warn">≈</span> quốc gia app tự tìm từ tiêu đề (file không có ô quốc gia cho video này).
+        <span class="mark mark--edit">sửa</span> quốc gia đã sửa tay (bấm vào tên nước để sửa, lưu trên trình duyệt này).</p>
     </details>
   </section>
 </main>
