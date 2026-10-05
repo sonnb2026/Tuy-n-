@@ -294,7 +294,19 @@ const ALIASES = []; // { alias, code, tier }  tier: 0 = tên nước/thành ph�
 for (const line of RAW.trim().split("\n")) {
   const [code, name, continent, aliases] = line.split("|");
   COUNTRIES[code] = { code, name, continent };
-  for (const a of aliases.split(";")) ALIASES.push({ alias: a.trim(), code, tier: 0 });
+  const list = new Set(aliases.split(";").map((a) => a.trim()));
+  list.add(normalize(name)); // tên hiển thị tiếng Anh cũng là 1 alias ("Dominican Republic", "Ivory Coast"...)
+  for (const a of list) ALIASES.push({ alias: a, code, tier: 0 });
+}
+// Tên tiếng Việt - chỉ dùng khi đọc cột "Quốc gia" trong file (không dùng để quét tiêu đề).
+const VI_NAMES = "AF:Afghanistan;AM:Armenia;AZ:Azerbaijan;BH:Bahrain;BD:Bangladesh;BT:Bhutan;BN:Brunei;KH:Campuchia;CN:Trung Quốc;HK:Hồng Kông;MO:Ma Cao;TW:Đài Loan;XT:Tây Tạng;GE:Gruzia;IN:Ấn Độ;ID:Indonesia;IR:Iran;IQ:Iraq;IL:Israel;PS:Palestine;JP:Nhật Bản;JO:Jordan;KZ:Kazakhstan;KG:Kyrgyzstan;LA:Lào;LB:Liban;MY:Malaysia;MV:Maldives;MN:Mông Cổ;MM:Myanmar;NP:Nepal;KP:Triều Tiên;KR:Hàn Quốc;OM:Oman;PK:Pakistan;PH:Philippines;QA:Qatar;SA:Ả Rập Xê Út;SG:Singapore;LK:Sri Lanka;SY:Syria;TJ:Tajikistan;TH:Thái Lan;TL:Đông Timor;TR:Thổ Nhĩ Kỳ;TM:Turkmenistan;AE:UAE;UZ:Uzbekistan;VN:Việt Nam;YE:Yemen;AL:Albania;AD:Andorra;AT:Áo;BY:Belarus;BE:Bỉ;BA:Bosnia;BG:Bulgaria;HR:Croatia;CY:Síp;CZ:Séc;DK:Đan Mạch;EE:Estonia;FI:Phần Lan;FR:Pháp;DE:Đức;GR:Hy Lạp;HU:Hungary;IS:Iceland;IE:Ireland;IT:Ý;XK:Kosovo;LV:Latvia;LI:Liechtenstein;LT:Lithuania;LU:Luxembourg;MT:Malta;MD:Moldova;MC:Monaco;ME:Montenegro;NL:Hà Lan;MK:Bắc Macedonia;NO:Na Uy;PL:Ba Lan;PT:Bồ Đào Nha;RO:Romania;RU:Nga;SM:San Marino;RS:Serbia;SK:Slovakia;SI:Slovenia;ES:Tây Ban Nha;SE:Thụy Điển;CH:Thụy Sĩ;UA:Ukraina;GB:Anh;VA:Vatican;FO:Quần đảo Faroe;DZ:Algeria;AO:Angola;BJ:Benin;BW:Botswana;BF:Burkina Faso;BI:Burundi;CV:Cabo Verde;CM:Cameroon;CF:CH Trung Phi;TD:Chad;KM:Comoros;CD:CHDC Congo;CG:Congo;CI:Bờ Biển Ngà;DJ:Djibouti;EG:Ai Cập;GQ:Guinea Xích Đạo;ER:Eritrea;SZ:Eswatini;ET:Ethiopia;GA:Gabon;GM:Gambia;GH:Ghana;GN:Guinea;GW:Guinea-Bissau;KE:Kenya;LS:Lesotho;LR:Liberia;LY:Libya;MG:Madagascar;MW:Malawi;ML:Mali;MR:Mauritania;MU:Mauritius;MA:Ma-rốc;MZ:Mozambique;NA:Namibia;NE:Niger;NG:Nigeria;RW:Rwanda;ST:São Tomé và Príncipe;SN:Senegal;SC:Seychelles;SL:Sierra Leone;SO:Somalia;ZA:Nam Phi;SS:Nam Sudan;SD:Sudan;TZ:Tanzania;TG:Togo;TN:Tunisia;UG:Uganda;ZM:Zambia;ZW:Zimbabwe;US:Mỹ;CA:Canada;MX:Mexico;GT:Guatemala;BZ:Belize;SV:El Salvador;HN:Honduras;NI:Nicaragua;CR:Costa Rica;PA:Panama;CU:Cuba;DO:CH Dominica;HT:Haiti;JM:Jamaica;PR:Puerto Rico;BS:Bahamas;BB:Barbados;TT:Trinidad và Tobago;DM:Dominica;GL:Greenland;AR:Argentina;BO:Bolivia;BR:Brazil;CL:Chile;CO:Colombia;EC:Ecuador;GY:Guyana;PY:Paraguay;PE:Peru;SR:Suriname;UY:Uruguay;VE:Venezuela;GF:Guyane thuộc Pháp;AU:Australia;NZ:New Zealand;PG:Papua New Guinea;FJ:Fiji;SB:Quần đảo Solomon;VU:Vanuatu;WS:Samoa;TO:Tonga;KI:Kiribati;TV:Tuvalu;NR:Nauru;FM:Micronesia;MH:Quần đảo Marshall;PW:Palau;AQ:Nam Cực";
+for (const pair of VI_NAMES.split(";")) {
+  const [code, name] = pair.split(":");
+  ALIASES.push({ alias: normalize(name), code, tier: 3 });
+}
+// Viết tắt hay gặp trong cột "Quốc gia" tự gõ tay.
+for (const [alias, code] of [["dominican rep", "DO"], ["dr", "DO"], ["uk", "GB"], ["u s", "US"], ["u s a", "US"], ["drc", "CD"], ["png", "PG"], ["czechia", "CZ"]]) {
+  ALIASES.push({ alias, code, tier: 3 });
 }
 for (const line of PEOPLE.trim().split("\n")) {
   const [code, aliases] = line.split("|");
@@ -319,7 +331,8 @@ ALIASES.push({ alias: "irani", code: "IR", tier: 2 }, { alias: "iranies", code: 
 // "republica dominicana" không thành "dominica", "corea del norte" không thành "corea"...
 ALIASES.sort((a, b) => b.alias.length - a.alias.length);
 
-const ALIAS_RE = ALIASES.map((a) => ({
+// Alias tầng 3 (tên tiếng Việt, viết tắt "uk", "dr"...) chỉ dùng cho ô "Quốc gia", không quét tiêu đề.
+const ALIAS_RE = ALIASES.filter((a) => a.tier < 3).map((a) => ({
   ...a,
   re: new RegExp(`(?<![a-z0-9])${a.alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9])`, "g"),
 }));
@@ -475,6 +488,18 @@ export function geoFromCodes(codes, source) {
     source,
     codes,
   };
+}
+
+// Đọc giá trị ô "Quốc gia" trong file (vd "Russia", "Dominican Rep", "Nga") -> mã nước.
+// Không nhận ra -> null (giao diện giữ nguyên chữ trong ô làm tên nước).
+export function countryFromCell(text) {
+  const n = normalize(text);
+  if (!n) return null;
+  // Khớp nguyên ô trước (để "dr" / "uk" chỉ được nhận khi ô chỉ có đúng chữ đó).
+  const exact = ALIASES.find((a) => a.alias === n);
+  if (exact) return exact.code;
+  const codes = findCountries(text);
+  return codes.length === 1 ? codes[0] : null;
 }
 
 export function countryList() {
