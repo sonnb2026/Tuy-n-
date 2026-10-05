@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=7" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -45,7 +45,7 @@
       </div>
       <div class="table-scroll">
         <table class="src">
-          <thead><tr><th>File</th><th>Sheet</th><th>Cột tuyến đề</th><th>Cột tiêu đề</th><th>Cột VPH</th><th>Cột quốc gia</th><th>Cột châu lục</th><th>Cột link</th><th>Cột thumbnail</th><th class="num" title="Số dòng video đọc được trong file, trước khi gộp trùng">Dòng</th><th></th></tr></thead>
+          <thead><tr><th>File</th><th>Sheet</th><th>Cột tuyến đề</th><th>Cột tiêu đề</th><th>Cột VPH</th><th>Cột quốc gia</th><th>Cột châu lục</th><th>Cột link</th><th class="num" title="Số dòng video đọc được trong file, trước khi gộp trùng">Dòng</th><th></th></tr></thead>
           <tbody id="sourceRows"></tbody>
         </table>
       </div>
@@ -75,6 +75,7 @@
           <tbody id="libraryRows"></tbody>
         </table>
       </div>
+      <button type="button" class="btn btn--small more-btn" id="libraryMore" hidden></button>
       <p class="note"><span class="mark mark--warn">≈</span> quốc gia app tự tìm từ tiêu đề (file không có ô quốc gia cho video này).
         <span class="mark mark--edit">sửa</span> quốc gia đã sửa tay (bấm vào tên nước để sửa, lưu trên trình duyệt này).</p>
     </details>
@@ -82,6 +83,6 @@
 </main>
 
 <div class="dropveil" id="dropVeil" hidden>Thả file để đọc</div>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>
