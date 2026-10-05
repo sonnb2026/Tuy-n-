@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="description" content="Đọc file dữ liệu video, xếp tuyến đề, trích quốc gia / châu lục và tổng hợp VPH." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='72' font-size='70' text-anchor='middle'%3E%F0%9F%A7%AD%3C/text%3E%3C/svg%3E" />
+<title>Phân tích tuyến đề</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <div class="top__title">
+    <h1>Phân tích tuyến đề</h1>
+    <p class="top__sub">Đưa file dữ liệu video vào, app tự xếp tuyến đề, tìm quốc gia và châu lục từ tiêu đề, rồi cộng VPH.</p>
+  </div>
+  <div class="top__meta" id="topMeta" hidden>
+    <div class="stat"><span class="stat__label">Sum of VPH</span><span class="stat__value" id="statVph">–</span></div>
+    <div class="stat"><span class="stat__label">Video</span><span class="stat__value" id="statVideos">–</span></div>
+    <div class="stat"><span class="stat__label">Quốc gia</span><span class="stat__value" id="statCountries">–</span></div>
+    <button type="button" class="btn btn--ghost" id="exportBtn">Xuất Excel</button>
+  </div>
+</header>
+
+<main>
+  <section class="drop" id="drop">
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv,.txt" multiple hidden />
+    <div class="drop__empty" id="dropEmpty">
+      <p class="drop__title">Kéo thả file Excel hoặc CSV vào đây</p>
+      <p class="drop__hint">Dùng được file "Xuất Excel" của app theo dõi kênh. Chọn nhiều file cùng lúc thì app gộp lại và bỏ video trùng. File chỉ được đọc trên máy bạn, không gửi lên đâu cả.</p>
+      <button type="button" class="btn btn--primary" data-pick>Chọn file</button>
+    </div>
+    <div class="sources" id="sources" hidden>
+      <div class="sources__head">
+        <span class="sources__title">Nguồn dữ liệu</span>
+        <label class="check"><input type="checkbox" id="dedupe" checked /> Gộp video trùng</label>
+        <button type="button" class="btn btn--small" data-pick>Thêm file</button>
+        <button type="button" class="btn btn--small btn--ghost" id="clearBtn">Xoá hết</button>
+      </div>
+      <div class="table-scroll">
+        <table class="src">
+          <thead><tr><th>File</th><th>Sheet</th><th>Cột tiêu đề</th><th>Cột VPH</th><th>Cột link</th><th class="num" title="Số dòng video đọc được trong file, trước khi gộp trùng">Dòng</th><th></th></tr></thead>
+          <tbody id="sourceRows"></tbody>
+        </table>
+      </div>
+      <p class="sources__note" id="sourceNote"></p>
+    </div>
+    <p class="drop__error" id="dropError" role="alert"></p>
+  </section>
+
+  <section id="results" hidden>
+    <div class="filters" id="filters"></div>
+    <div class="pivots">
+      <div class="pivot" data-dim="topic"></div>
+      <div class="pivot" data-dim="country"></div>
+      <div class="pivot" data-dim="continent"></div>
+    </div>
+    <p class="note">Bấm 1 dòng để lọc 2 bảng còn lại theo dòng đó (bấm nhiều dòng để chọn nhiều, bấm lại để bỏ). Bấm tiêu đề cột để sắp xếp.</p>
+
+    <details class="library" id="library">
+      <summary>Danh sách video <span id="libraryCount"></span></summary>
+      <div class="library__tools">
+        <input type="search" id="librarySearch" placeholder="Tìm theo tiêu đề hoặc kênh" />
+        <label class="check"><input type="checkbox" id="reviewOnly" /> Chỉ video cần kiểm tra</label>
+      </div>
+      <div class="table-scroll table-scroll--tall">
+        <table class="vids">
+          <thead><tr><th>Video</th><th>Tuyến đề</th><th>Quốc gia</th><th>Châu lục</th><th class="num">VPH</th></tr></thead>
+          <tbody id="libraryRows"></tbody>
+        </table>
+      </div>
+      <p class="note"><span class="mark mark--warn">?</span> tiêu đề giáp ranh giữa 2 tuyến, nên xem lại.
+        <span class="mark mark--edit">sửa</span> đã sửa tay. Sửa bằng ô chọn ngay trong bảng, lưu trên trình duyệt này.</p>
+    </details>
+  </section>
+</main>
+
+<div class="dropveil" id="dropVeil" hidden>Thả file để đọc</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
