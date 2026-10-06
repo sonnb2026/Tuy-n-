@@ -23,8 +23,8 @@ export const CONTINENTS = {
 
 const RAW = `
 AF|Afghanistan|AS|afganistan;afghanistan;kabul;afeganistao
-AM|Armenia|AS|armenia;erevan
-AZ|Azerbaijan|AS|azerbaiyan;azerbaijan;baku
+AM|Armenia|EU|armenia;erevan
+AZ|Azerbaijan|EU|azerbaiyan;azerbaijan;baku
 BH|Bahrain|AS|bahrein;barein;bahrain
 BD|Bangladesh|AS|bangladesh;banglades;dhaka;daca
 BT|Bhutan|AS|butan;bhutan;butao;bhoutan
@@ -35,7 +35,7 @@ HK|Hong Kong|AS|hong kong;kowloon
 MO|Macau|AS|macao;macau
 TW|Taiwan|AS|taiwan;taipei
 XT|Tibet|AS|tibet;lhasa;tibete
-GE|Georgia|AS|georgia;tiflis;tbilisi
+GE|Georgia|EU|georgia;tiflis;tbilisi
 IN|India|AS|india;mumbai;bombay;nueva delhi;delhi;calcuta;kolkata;varanasi;benares;rajastan;rajasthan;new delhi;inde
 ID|Indonesia|AS|indonesia;yakarta;jakarta;bali;sumatra;java;indonesie
 IR|Iran|AS|iran;teheran;tehran;persia;ira;ormuz;hormuz
@@ -488,6 +488,31 @@ export function geoFromCodes(codes, source) {
     source,
     codes,
   };
+}
+
+// ---------- Châu lục theo nội dung ----------
+// Các nước nằm vắt ngang 2 châu lục được xếp theo cách khán giả nhìn nhận chứ không theo địa lý
+// thuần tuý: Georgia, Armenia, Azerbaijan, Síp -> Châu Âu; Kazakhstan -> Châu Á; Nga -> Châu Âu;
+// Thổ Nhĩ Kỳ -> Châu Á (đã đặt sẵn ở bảng RAW phía trên).
+// Với chính các nước này, tiêu đề có thể "kéo" sang châu khác:
+//   ortodoxo / cristiano / europeo / eslavo      -> Châu Âu
+//   musulmán / islámico / árabe / asiático ...    -> Châu Á
+// Có cả 2 loại từ khoá (hoặc không có) thì giữ mặc định.
+const TRANSCONTINENTAL = new Set(["GE", "AM", "AZ", "CY", "TR", "RU", "KZ"]);
+// "Europa"/"Asia" chỉ tính khi đi với "de/en/del este/central" ("el país más pobre de Europa"),
+// không tính khi so sánh ("un país más grande que Europa").
+const EUROPE_CUES = /\b(?:ortodox\w*|cristian\w*|christian\w*|crista[os]?|chretien\w*|europe(?:o|a|os|as|u|us|en|enne|an)|eslav\w*|slav\w*|(?:de|en|da|na|of|in) europa|europa del este|europe de l est|eastern europe)\b/;
+const ASIA_CUES = /\b(?:musulman\w*|muculman\w*|muslim\w*|islam\w*|arabe?s?|asiatic\w*|asiatique\w*|(?:de|en|da|na|of|in) asia|asia central|central asia|oriente medio|medio oriente|middle east|moyen orient)\b/;
+
+export function contentContinent(geo, title) {
+  if (!geo || !TRANSCONTINENTAL.has(geo.countryCode)) return geo;
+  const t = normalize(title);
+  const eu = EUROPE_CUES.test(t);
+  const as = ASIA_CUES.test(t);
+  if (eu === as) return geo;
+  const code = eu ? "EU" : "AS";
+  if (code === geo.continentCode) return geo;
+  return { ...geo, continentCode: code, continent: CONTINENTS[code], continentByTitle: true };
 }
 
 // Đọc giá trị ô "Quốc gia" trong file (vd "Russia", "Dominican Rep", "Nga") -> mã nước.
