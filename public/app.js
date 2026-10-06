@@ -6,9 +6,9 @@
 //   - Quốc gia: lấy từ cột "Quốc gia" nếu file có; ô trống / file không có cột -> app tự tìm từ tiêu đề.
 //   - Châu lục: lấy từ cột "Châu lục" nếu file có; không có -> suy ra từ quốc gia.
 
-import { extractGeo, geoFromCodes, countryList, countryFromCell, COUNTRIES } from "./lib/geo.js?v=7";
-import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey } from "./lib/ingest.js?v=7";
-import { pivot, totals } from "./lib/pivot.js?v=7";
+import { extractGeo, geoFromCodes, countryList, countryFromCell, contentContinent, COUNTRIES } from "./lib/geo.js?v=8";
+import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey } from "./lib/ingest.js?v=8";
+import { pivot, totals } from "./lib/pivot.js?v=8";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -184,6 +184,8 @@ function withGroups(rec, topicLabels) {
     geo = extractGeo({ title: rec.title });
     countrySource = "title";
   }
+  // Nước vắt ngang 2 châu lục: xếp châu lục theo nội dung tiêu đề (xem contentContinent trong geo.js).
+  geo = contentContinent(geo, rec.title);
   // Châu lục: ô trong file nếu có, không thì theo quốc gia.
   const continentKey = rec.continentRaw ? "file:" + labelKey(rec.continentRaw) : geo.continentCode;
   const continent = rec.continentRaw || geo.continent;
