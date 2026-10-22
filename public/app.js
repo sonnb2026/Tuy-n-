@@ -67,12 +67,29 @@ const ROWS_PER_VIEW = 7; // số dòng hiện trong 1 lần cuộn của mỗi b
 const PAGE = 100;
 const DAY = 86400000;
 
+// Nhóm theo số ngày đã đăng (số nguyên, tính theo giờ thực lúc dựng bảng).
+const AGE_BUCKETS = [
+  { key: "d3", name: "Dưới 3 ngày", range: "0 – 2 ngày", max: 2, color: "#f472b6" },
+  { key: "d10", name: "Dưới 10 ngày", range: "3 – 9 ngày", max: 9, color: "#4ade80" },
+  { key: "d30", name: "Dưới 30 ngày", range: "10 – 29 ngày", max: 29, color: "#ff7a52" },
+  { key: "d30p", name: "Trên 30 ngày", range: "từ ngày 30", max: Infinity, color: "#60a5fa" },
+  { key: "none", name: "Không rõ ngày đăng", range: "thiếu ngày đăng", max: null, color: "#6c6c9c" },
+];
+const AGE_BY_KEY = Object.fromEntries(AGE_BUCKETS.map((b) => [b.key, b]));
+const OLD_DAYS = 30; // từ ngày này trở lên: ô "Lịch sử đăng" tô cam
+function ageKeyOf(published) {
+  if (published === null || published === undefined) return "none";
+  const d = Math.max(0, Math.floor((Date.now() - published) / DAY));
+  return AGE_BUCKETS.find((b) => b.max !== null && d <= b.max).key;
+}
+
 const DIMS = {
   topic: { title: "Tuyến đề", key: (r) => r.topicKey, label: (r) => r.topicLabel, special: (k) => k === BLANK },
   subject: { title: "Chủ thể chính", key: (r) => r.subjectKey, label: (r) => r.subjectLabel, special: (k) => k === BLANK },
   country: { title: "Quốc gia", key: (r) => r.countryKey, label: (r) => r.country, special: (k) => SPECIAL_GEO.has(k) },
   continent: { title: "Châu lục", key: (r) => r.continentKey, label: (r) => r.continent, special: (k) => SPECIAL_GEO.has(k) },
   channel: { title: "Kênh", key: (r) => r.channelKey, label: (r) => r.channelLabel, special: (k) => k === BLANK, views: true },
+  age: { title: "Thời gian đăng", key: (r) => r.ageKey, label: (r) => AGE_BY_KEY[r.ageKey].name, special: (k) => k === "none", fixed: true },
 };
 const DIM_IDS = Object.keys(DIMS);
 
@@ -98,6 +115,7 @@ let fileSeq = 0;
 const nf = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 const nfCompact = new Intl.NumberFormat("vi-VN", { notation: "compact", maximumFractionDigits: 1 });
 const pf = new Intl.NumberFormat("vi-VN", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const pf0 = new Intl.NumberFormat("vi-VN", { style: "percent", maximumFractionDigits: 0 });
 const pf2 = new Intl.NumberFormat("vi-VN", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt = (n) => nf.format(n);
 const fmtShort = (n) => (Math.abs(n) >= 10000 ? nfCompact.format(n) : nf.format(n));
@@ -124,6 +142,7 @@ function fmtAge(t) {
   if (d < 0) return "Sắp";
   return fmt(Math.floor(d));
 }
+const isOld = (t) => Math.floor((Date.now() - t) / DAY) >= OLD_DAYS;
 function ageTitle(t) {
   const ms = Date.now() - t;
   if (ms < 0) return `Đăng lúc ${fmtDateTime(t)} (chưa tới)`;
@@ -283,6 +302,7 @@ function withGroups(rec, labels) {
     continent,
     countrySource,
     override: ov || null,
+    ageKey: ageKeyOf(rec.published),
   };
 }
 
@@ -339,7 +359,8 @@ function rebuild() {
 }
 
 // ---------- lọc chéo ----------
-const visibleDims = () => DIM_IDS.filter((d) => (d === "subject" ? state.has.subject : d === "channel" ? state.has.channel : true));
+const visibleDims = () =>
+  DIM_IDS.filter((d) => (d === "subject" ? state.has.subject : d === "channel" ? state.has.channel : d === "age" ? state.has.date : true));
 function filtered(except) {
   return state.records.filter((r) =>
     DIM_IDS.every((d) => d === except || !state.sel[d].size || state.sel[d].has(DIMS[d].key(r)))
@@ -347,6 +368,10 @@ function filtered(except) {
 }
 
 function sortRows(dim, rows) {
+  if (DIMS[dim].fixed) {
+    const order = AGE_BUCKETS.map((b) => b.key);
+    return rows.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  }
   const { by, dir } = state.sort[dim];
   const D = DIMS[dim];
   const s = dir === "asc" ? 1 : -1;
@@ -382,7 +407,7 @@ function render() {
   els.pivotsWrap.classList.toggle("no-channel", !vis.has("channel"));
   for (const el of els.pivots) {
     el.hidden = !vis.has(el.dataset.dim);
-    if (!el.hidden) renderPivot(el, el.dataset.dim);
+    if (!el.hidden) el.dataset.dim === "age" ? renderAgeCard(el) : renderPivot(el, el.dataset.dim);
   }
   renderLibrary();
 }
@@ -497,6 +522,35 @@ function pivotColumns(dim) {
   cols.push({ id: "count", label: "COUNTA", title: `COUNTA của ${DIMS[dim].title}` });
   cols.push({ id: "count", label: "%", title: "% theo COUNTA (số video của dòng / tổng số video trong bảng)", pct: true });
   return cols;
+}
+
+// Thẻ "VPH theo thời gian đăng": 4 nhóm cố định, % = phần VPH của nhóm / tổng VPH (theo bộ lọc).
+function renderAgeCard(el) {
+  const recs = filtered("age");
+  const groups = new Map(pivot(recs, DIMS.age.key, DIMS.age.label).map((g) => [g.key, g]));
+  const total = recs.reduce((s, r) => s + (r.vph ?? 0), 0);
+  const sel = state.sel.age;
+  const chSel = state.sel.channel;
+  const scope = !chSel.size
+    ? "tất cả kênh"
+    : chSel.size === 1
+      ? esc(state.records.find((r) => chSel.has(r.channelKey))?.channelLabel || "1 kênh")
+      : `${chSel.size} kênh`;
+  const rows = AGE_BUCKETS.filter((b) => b.key !== "none" || groups.get("none")?.count)
+    .map((b) => {
+      const g = groups.get(b.key) || { sum: 0, count: 0 };
+      const share = total ? g.sum / total : 0;
+      const cls = ["agerow", sel.has(b.key) ? "is-selected" : "", sel.size && !sel.has(b.key) ? "is-dim" : ""].join(" ");
+      return `<div class="${cls}" data-key="${b.key}" role="button" tabindex="0" aria-pressed="${sel.has(b.key)}" style="--c:${b.color}">
+        <div class="agerow__top"><span class="agerow__name"><i></i>${b.name}</span><b class="agerow__sum">${fmt(g.sum)}</b><span class="agerow__pct">${pf0.format(share)}</span></div>
+        <div class="agerow__bot"><span class="agerow__bar"><span style="width:${(share * 100).toFixed(1)}%"></span></span><span class="agerow__sub">${b.range} · ${fmt(g.count)} video</span></div>
+      </div>`;
+    })
+    .join("");
+  el.innerHTML = `<div class="agecard">
+    <div class="agecard__head"><div class="agecard__title">VPH theo thời gian đăng</div><div class="agecard__total">Tổng ${fmt(total)} · ${scope}</div></div>
+    ${rows}
+  </div>`;
 }
 
 function renderPivot(el, dim) {
@@ -654,7 +708,8 @@ function renderLibrary() {
           ? `<span class="muted">${esc(r.publishedRaw || "–")}</span>`
           : `<span title="${fmtDateTime(r.published)}">${fmtDate(r.published)}</span>`;
       case "age":
-        return r.published === null ? `<span class="muted">–</span>` : `<span data-pub="${r.published}" title="${ageTitle(r.published)}">${fmtAge(r.published)}</span>`;
+        if (r.published === null) return `<span class="muted">–</span>`;
+        return `<button type="button" class="cell-link age${isOld(r.published) ? " is-old" : ""}${state.sel.age.has(r.ageKey) ? " is-on" : ""}" data-fdim="age" data-fkey="${r.ageKey}" data-pub="${r.published}" title="${ageTitle(r.published)}">${fmtAge(r.published)}</button>`;
       case "views":
         return r.views === null ? `<span class="muted">–</span>` : fmt(r.views);
       case "engagement": {
@@ -735,6 +790,7 @@ setInterval(() => {
     const t = Number(el.dataset.pub);
     el.textContent = fmtAge(t);
     el.title = ageTitle(t);
+    el.classList.toggle("is-old", isOld(t));
   }
 }, 60000);
 
@@ -935,11 +991,11 @@ for (const el of els.pivots) {
       renderPivot(el, dim);
       return;
     }
-    const tr = e.target.closest("tbody tr[data-key]");
+    const tr = e.target.closest("tbody tr[data-key], .agerow[data-key]");
     if (tr) toggleSel(dim, tr.dataset.key);
   });
   el.addEventListener("keydown", (e) => {
-    const tr = e.target.closest("tbody tr[data-key]");
+    const tr = e.target.closest("tbody tr[data-key], .agerow[data-key]");
     if (tr && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
       toggleSel(dim, tr.dataset.key);
@@ -1064,6 +1120,7 @@ els.exportBtn.addEventListener("click", () => {
     const D = DIMS[dim];
     const rows = sortRows(dim, pivot(filtered(dim), D.key, D.label));
     const t = totals(rows);
+    if (D.fixed) rows.forEach((r) => (r.label = `${r.label} (${AGE_BY_KEY[r.key].range})`));
     const withViews = D.views && state.has.views;
     const head = [D.title, "Sum of VPH", ...(withViews ? ["Tổng view"] : []), `COUNTA của ${D.title}`, "% theo COUNTA"];
     const line = (label, r) => [label, r.sum, ...(withViews ? [r.views] : []), r.count, t.count ? +(r.count / t.count).toFixed(4) : 0];
