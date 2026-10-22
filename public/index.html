@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12" />
+<link rel="stylesheet" href="style.css?v=13" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -33,7 +33,7 @@
     <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv,.txt" multiple hidden />
     <div class="drop__empty" id="dropEmpty">
       <p class="drop__title">Kéo thả file Excel hoặc CSV vào đây</p>
-      <p class="drop__hint">File cần có cột <b>Tuyến đề</b> (bạn tự điền), cột tiêu đề video và cột View/giờ, như file "Xuất Excel" của app theo dõi kênh có thêm cột Tuyến đề. Các cột <b>Chủ thể chính, Kênh, Ngày đăng, Lượt xem, Like, Bình luận, Danh từ 1, Danh từ 2, Tính chất</b> nếu có sẽ được dùng thêm. Chọn nhiều file cùng lúc thì app gộp lại và bỏ video trùng. File chỉ được đọc trên máy bạn, không gửi lên đâu cả.</p>
+      <p class="drop__hint">File cần có cột <b>Tuyến đề</b> (bạn tự điền), cột tiêu đề video và cột View/giờ, như file "Xuất Excel" của app theo dõi kênh có thêm cột Tuyến đề. Các cột <b>Chủ thể chính, Kênh, Ngày đăng, Lượt xem, Tương tác, Khu vực, Danh từ 1, Danh từ 2, Tính chất</b> nếu có sẽ được dùng thêm. Chọn nhiều file cùng lúc thì app gộp lại và bỏ video trùng. File chỉ được đọc trên máy bạn, không gửi lên đâu cả.</p>
       <button type="button" class="btn btn--primary" data-pick>Chọn file</button>
     </div>
     <div class="sources" id="sources" hidden>
@@ -81,6 +81,6 @@
 </main>
 
 <div class="dropveil" id="dropVeil" hidden>Thả file để đọc</div>
-<script type="module" src="app.js?v=12"></script>
+<script type="module" src="app.js?v=13"></script>
 </body>
 </html>
