@@ -122,7 +122,7 @@ const ageDays = (t) => (Date.now() - t) / DAY;
 function fmtAge(t) {
   const d = ageDays(t);
   if (d < 0) return "Sắp";
-  return d < 10 ? nf.format(Math.floor(d * 10) / 10) : fmt(Math.floor(d));
+  return fmt(Math.floor(d));
 }
 function ageTitle(t) {
   const ms = Date.now() - t;
@@ -573,9 +573,9 @@ const LIB_COLS = [
   { id: "title", label: "Video", text: (r) => r.title },
   { id: "channel", label: "Kênh", w: 112, need: "channel", text: (r) => (r.channelKey === BLANK ? "" : r.channelLabel), filter: "channel" },
   { id: "date", label: "Ngày đăng", w: 88, need: "date", num: (r) => r.published },
-  { id: "age", label: "Lịch sử đăng", sub: "số ngày", w: 74, need: "date", num: (r) => (r.published === null ? null : -r.published) },
-  { id: "views", label: "Lượt xem", w: 78, need: "views", num: (r) => r.views },
-  { id: "engagement", label: "Tương tác", sub: "(Like+BL)/view", w: 80, need: "engagement", num: (r) => r.engagement },
+  { id: "age", label: "Lịch sử đăng", w: 74, need: "date", num: (r) => (r.published === null ? null : -r.published) },
+  { id: "views", label: "Lượt xem", w: 92, need: "views", num: (r) => r.views },
+  { id: "engagement", label: "Tương tác", w: 80, need: "engagement", num: (r) => r.engagement },
   { id: "vph", label: "VPH", w: 66, num: (r) => r.vph },
   { id: "topic", label: "Tuyến đề", w: 124, text: (r) => (r.topicKey === BLANK ? "" : r.topicLabel), filter: "topic" },
   { id: "subject", label: "Chủ thể chính", w: 112, need: "subject", text: (r) => (r.subjectKey === BLANK ? "" : r.subjectLabel), filter: "subject" },
@@ -656,7 +656,7 @@ function renderLibrary() {
       case "age":
         return r.published === null ? `<span class="muted">–</span>` : `<span data-pub="${r.published}" title="${ageTitle(r.published)}">${fmtAge(r.published)}</span>`;
       case "views":
-        return r.views === null ? `<span class="muted">–</span>` : `<span title="${fmt(r.views)}">${fmtShort(r.views)}</span>`;
+        return r.views === null ? `<span class="muted">–</span>` : fmt(r.views);
       case "engagement": {
         if (r.engagement === null) return `<span class="muted">–</span>`;
         const how = r.likes !== null || r.comments !== null ? `(${fmt(r.likes || 0)} like + ${fmt(r.comments || 0)} bình luận) / ${fmt(r.views)} view` : "Theo cột Tương tác trong file";
