@@ -109,25 +109,25 @@ select.mini {
 .pivot { grid-column: span 2; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; transition: box-shadow .3s; }
 .pivot.flash { animation: flash 1.2s ease-out; }
 
-/* thẻ VPH theo thời gian đăng */
-.agecard { padding: 16px 16px 12px; }
-.agecard__head { padding-bottom: 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
-.agecard__title { font: 600 12.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.agecard__total { font-size: 12.5px; color: var(--faint); margin-top: 4px; }
-.agerow { padding: 10px 10px; border-radius: 12px; cursor: pointer; transition: background .15s, opacity .15s; }
-.agerow + .agerow { margin-top: 4px; }
+/* thẻ VPH theo thời gian đăng (gọn) */
+.agecard { padding: 12px 12px 8px; }
+.agecard__head { padding: 0 4px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.agecard__title { font: 600 11.5px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.agecard__total { font-size: 11.5px; color: var(--faint); }
+.agerow { padding: 6px 8px; border-radius: 10px; cursor: pointer; transition: background .15s, opacity .15s; }
+.agerow + .agerow { margin-top: 2px; }
 .agerow:hover { background: rgba(255, 255, 255, 0.035); }
 .agerow.is-selected { background: rgba(255, 255, 255, 0.06); box-shadow: inset 3px 0 0 var(--c); }
 .agerow.is-dim { opacity: 0.45; }
-.agerow__top, .agerow__bot { display: flex; align-items: center; gap: 12px; }
-.agerow__bot { margin-top: 6px; }
-.agerow__name { flex: 1; font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 9px; }
-.agerow__name i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
-.agerow__sum { font: 600 17px var(--font-mono); color: var(--c); font-variant-numeric: tabular-nums; }
-.agerow__pct { width: 40px; text-align: right; font: 13px var(--font-mono); color: var(--muted); }
-.agerow__bar { flex: 1; max-width: 200px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
-.agerow__bar span { display: block; height: 100%; border-radius: 3px; background: var(--c); }
-.agerow__sub { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.agerow__top, .agerow__bot { display: flex; align-items: center; gap: 10px; }
+.agerow__bot { margin-top: 3px; }
+.agerow__name { flex: 1; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.agerow__name i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.agerow__sum { font: 600 14px var(--font-mono); color: var(--c); font-variant-numeric: tabular-nums; }
+.agerow__pct { width: 34px; text-align: right; font: 11.5px var(--font-mono); color: var(--muted); }
+.agerow__bar { flex: 1; max-width: 160px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.agerow__bar span { display: block; height: 100%; border-radius: 2px; background: var(--c); }
+.agerow__sub { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
 @keyframes flash { 0% { box-shadow: 0 0 0 3px var(--teal); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .pivot__scroll { max-height: min(72vh, 680px); overflow: auto; }
 .pt { width: 100%; border-collapse: collapse; }
