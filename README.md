@@ -48,8 +48,7 @@ Không cần YouTube API key, GitHub Actions hay biến môi trường nào.
 - **Tương tác** = (Like + Bình luận) / Lượt xem, hiện dạng % (vd 1,23%). Thiếu Like/Bình luận hoặc
   Lượt xem thì lấy cột "Tương tác" có sẵn trong file ("2,5%" hoặc 0,025 đều hiểu là 2,5%).
 - **Tổng view** (bảng Kênh): cộng cột Lượt xem của các video trong nhóm.
-- **Lịch sử đăng**: số ngày kể từ lúc đăng, tính theo giờ thực (tự cập nhật mỗi phút; dưới 10 ngày
-  hiện thêm 1 chữ số thập phân).
+- **Lịch sử đăng**: số ngày (số nguyên) kể từ lúc đăng, tính theo giờ thực, tự cập nhật mỗi phút.
 - **Gộp video trùng** (bật sẵn): cùng link video hoặc cùng tiêu đề khi không có cột link → chỉ tính 1
   lần, giữ bản xuất hiện sau cùng; ô nào bản sau để trống (vd file xuất mới chưa điền Tuyến đề) thì lấy
   từ bản trước.
@@ -62,6 +61,9 @@ Không cần YouTube API key, GitHub Actions hay biến môi trường nào.
 
 - Bấm 1 dòng ở bảng nào thì các bảng còn lại lọc theo dòng đó (như slicer của Excel). Dòng đang chọn
   được đưa lên đầu bảng. Bấm nhiều dòng để chọn nhiều, bấm lại để bỏ.
+- Thẻ **VPH theo thời gian đăng** (cần cột Ngày đăng): Dưới 3 ngày (0–2), Dưới 10 ngày (3–9), Dưới 30 ngày
+  (10–29), Trên 30 ngày (từ ngày 30). % = VPH của nhóm / tổng VPH. Bấm 1 nhóm để lọc các bảng khác.
+- Ô Lịch sử đăng của video từ 30 ngày trở lên hiện màu cam; bấm ô này để lọc theo nhóm thời gian.
 - Mỗi bảng hiện 7 dòng, cuộn để xem tiếp. Bấm tiêu đề cột để sắp xếp.
 - **Danh sách video**:
   - Trỏ chuột vào tiêu đề → hiện bản dịch tiếng Việt (lấy từ cột Dịch trong file; không có thì gọi
