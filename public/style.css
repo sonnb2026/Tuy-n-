@@ -174,9 +174,9 @@ select.mini {
 .vids th.num { font-family: inherit; font-size: 11.5px; white-space: normal; }
 .vids select.mini { max-width: 100%; width: 100%; }
 .vids .sub { display: block; font-size: 11px; color: var(--faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cell-link { display: inline; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; line-height: 1.35; border-bottom: 1px dashed var(--faint); }
-.cell-link:hover { border-bottom-color: var(--teal); color: #fff; }
-.cell-link.is-on { color: var(--teal); border-bottom-color: var(--teal); }
+.cell-link { display: inline; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; line-height: 1.35; }
+.cell-link:hover { color: var(--teal); }
+.cell-link.is-on { color: var(--teal); }
 .cell-link.muted { color: var(--faint); }
 .cell-link i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
 .edit-btn { background: none; border: 0; color: var(--faint); cursor: pointer; padding: 0 3px; font-size: 12px; opacity: 0; transition: opacity .15s; }
