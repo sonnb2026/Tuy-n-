@@ -32,12 +32,11 @@ const FIELD_RULES = {
   subject: [["chu the chinh", "chu the", "main subject", "subject", "doi tuong chinh"], ["chu the"], ["count", "sum"]],
   country: [["quoc gia", "country", "nuoc", "ten nuoc"], [], ["count", "sum"]],
   continent: [["chau luc", "continent", "luc dia"], [], ["count", "sum"]],
+  region: [["khu vuc", "region", "vung", "vung mien", "khu vuc dia ly", "subregion", "sub region"], ["khu vuc", "region"], ["link", "count", "sum"]],
   translation: [["dich", "ban dich", "tieu de dich", "dich tieu de", "tieng viet", "translation", "tieu de tieng viet", "vietsub"], ["dich", "translat"], ["link"]],
   date: [["ngay dang", "ngay dang video", "ngay xuat ban", "thoi gian dang", "published", "published at", "publish date", "upload date", "ngay upload", "ngay"], ["ngay dang", "publish", "upload", "xuat ban"], ["cap nhat", "update", "so ngay", "lich su"]],
   views: [["luot xem", "view", "views", "tong view", "tong luot xem", "luot view", "view count", "viewcount", "so view", "so luot xem"], ["luot xem", "tong view"], ["/gio", "gio", "hour", "vph", "/ngay"]],
   engagement: [["tuong tac", "ty le tuong tac", "luot tuong tac", "engagement", "engagement rate", "interactions"], ["tuong tac", "engagement"], []],
-  likes: [["like", "likes", "luot thich", "luot like", "so like", "so luot thich"], ["luot thich"], ["/"]],
-  comments: [["binh luan", "comment", "comments", "luot binh luan", "so binh luan"], ["binh luan"], ["/"]],
   noun1: [["danh tu 1", "danh tu1", "noun 1", "noun1"], ["danh tu 1"], []],
   noun2: [["danh tu 2", "danh tu2", "noun 2", "noun2"], ["danh tu 2"], []],
   nature: [["tinh chat", "tinh chat video", "nature", "tone"], ["tinh chat"], []],
@@ -185,19 +184,6 @@ function mk(y, mo, d, hh, mm, ss) {
   return dt.getMonth() === mo - 1 ? dt.getTime() : null;
 }
 
-// Tương tác = (Like + Bình luận) / Lượt xem, trả về tỉ lệ (0.0235 = 2,35%).
-// Thiếu Like/Bình luận hoặc Lượt xem thì dùng cột "Tương tác" có sẵn trong file (nếu có):
-// "2,35%" -> 0.0235; số ≤ 1 coi là tỉ lệ; số > 1 coi là phần trăm (2.35 -> 2,35%).
-export function engagementRate(likes, comments, views, fallbackCell) {
-  if ((likes !== null || comments !== null) && views !== null && views > 0) return ((likes || 0) + (comments || 0)) / views;
-  const raw = String(fallbackCell ?? "").trim();
-  if (!raw) return null;
-  const pctStr = /%$/.test(raw);
-  const n = parseNumber(pctStr ? raw.slice(0, -1) : fallbackCell);
-  if (n === null) return null;
-  return pctStr || n > 1 ? n / 100 : n;
-}
-
 // Khoá nhận diện 1 video: videoId lấy từ link nếu có, không thì tiêu đề chuẩn hoá.
 export function videoKey(link, title) {
   const m = String(link || "").match(/(?:[?&]v=|youtu\.be\/|\/shorts\/|\/live\/|\/embed\/)([A-Za-z0-9_-]{11})/);
@@ -238,9 +224,8 @@ export function buildRecords(aoa, headerRow, cols, { source = "" } = {}) {
     const key = videoKey(link, title);
     const rawVph = cell(row, cols.vph) ?? null;
     const views = parseNumber(cell(row, cols.views));
-    const likes = parseNumber(cell(row, cols.likes));
-    const comments = parseNumber(cell(row, cols.comments));
-    const engagement = engagementRate(likes, comments, views, cell(row, cols.engagement));
+    // Tương tác: giữ nguyên giá trị trong file để hiển thị; bản số chỉ dùng để sắp xếp.
+    const engagementRaw = cell(row, cols.engagement) ?? "";
     const rawDate = cell(row, cols.date);
     records.push({
       key,
@@ -258,9 +243,9 @@ export function buildRecords(aoa, headerRow, cols, { source = "" } = {}) {
       vph: parseNumber(rawVph),
       vphRaw: rawVph,
       views,
-      likes,
-      comments,
-      engagement,
+      engagement: parseNumber(engagementRaw),
+      engagementRaw,
+      region: text(row, cols.region),
       published: parseDate(rawDate),
       publishedRaw: rawDate ?? "",
       source,
