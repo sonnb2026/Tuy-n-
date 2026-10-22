@@ -305,7 +305,7 @@ for (const pair of VI_NAMES.split(";")) {
   ALIASES.push({ alias: normalize(name), code, tier: 3 });
 }
 // Viết tắt hay gặp trong cột "Quốc gia" tự gõ tay.
-for (const [alias, code] of [["dominican rep", "DO"], ["dr", "DO"], ["uk", "GB"], ["u s", "US"], ["u s a", "US"], ["drc", "CD"], ["png", "PG"], ["czechia", "CZ"]]) {
+for (const [alias, code] of [["dominican rep", "DO"], ["dr", "DO"], ["uk", "GB"], ["u s", "US"], ["u s a", "US"], ["drc", "CD"], ["png", "PG"], ["czechia", "CZ"], ["usa", "US"], ["us", "US"], ["america", "US"], ["hoa ky", "US"], ["uae", "AE"], ["han", "KR"], ["nhat", "JP"], ["trung", "CN"]]) {
   ALIASES.push({ alias, code, tier: 3 });
 }
 for (const line of PEOPLE.trim().split("\n")) {
@@ -351,6 +351,7 @@ export function normalize(text) {
   return String(text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -517,6 +518,41 @@ export function contentContinent(geo, title) {
 
 // Đọc giá trị ô "Quốc gia" trong file (vd "Russia", "Dominican Rep", "Nga") -> mã nước.
 // Không nhận ra -> null (giao diện giữ nguyên chữ trong ô làm tên nước).
+// Ô "Quốc gia" ghi nhóm đặc biệt (vd "Nhiều quốc gia" - hoặc chính file app xuất ra nạp lại).
+const CELL_SPECIAL = {
+  MULTI: ["nhieu quoc gia", "nhieu nuoc", "multiple countries", "multiple", "multi", "nhieu"],
+  WW: ["worldwide", "toan cau", "the gioi", "world", "global", "quoc te"],
+  UNK: ["unknown", "khong xac dinh", "khong ro", "chua ro", "n a", "na", "khac"],
+};
+export function specialCountryCell(text) {
+  const n = normalize(text);
+  for (const [code, list] of Object.entries(CELL_SPECIAL)) if (list.includes(n)) return code;
+  return null;
+}
+
+// Ô "Châu lục" trong file -> mã châu lục của app, để "Asia" / "Châu Á" / "châu á" gộp chung với
+// châu lục app tự suy ra từ quốc gia. Không nhận ra -> null (giữ nguyên chữ trong ô).
+const CONTINENT_CELL = {
+  AS: ["chau a", "a chau", "asia", "asie", "asian", "dong nam a", "nam a", "trung dong", "tay a", "dong a", "trung a", "middle east"],
+  EU: ["chau au", "au chau", "europe", "europa", "dong au", "tay au", "bac au", "nam au"],
+  AF: ["chau phi", "phi chau", "africa", "afrique", "bac phi", "nam phi chau"],
+  AMR: ["chau my", "my chau", "america", "americas", "the americas", "bac my", "nam my", "trung my", "my latinh", "latin america", "latinoamerica", "north america", "south america", "central america", "caribe", "caribbean", "america latina", "sudamerica", "centroamerica"],
+  OC: ["chau dai duong", "dai duong", "chau uc", "oceania", "oceanie", "australia oceania"],
+  AN: ["chau nam cuc", "nam cuc", "antarctica", "antartida"],
+  WW: ["toan cau", "worldwide", "the gioi", "world", "global"],
+  MULTI: ["nhieu chau luc", "nhieu chau", "multiple continents", "multiple"],
+  UNK: ["khong xac dinh", "unknown", "khong ro", "chua ro"],
+};
+export function continentFromCell(text) {
+  const n = normalize(text);
+  if (!n) return null;
+  for (const [code, list] of Object.entries(CONTINENT_CELL)) if (list.includes(n)) return code;
+  return null;
+}
+export function continentName(code) {
+  return CONTINENTS[code] || { WW: WORLDWIDE_CONTINENT, MULTI: MULTI_CONTINENT, UNK: UNKNOWN_CONTINENT }[code] || null;
+}
+
 export function countryFromCell(text) {
   const n = normalize(text);
   if (!n) return null;
