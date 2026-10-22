@@ -20,9 +20,9 @@ import {
   MULTI_COUNTRY,
   UNKNOWN_COUNTRY,
   WORLDWIDE_COUNTRY,
-} from "./lib/geo.js?v=10";
-import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey, norm } from "./lib/ingest.js?v=10";
-import { pivot, totals } from "./lib/pivot.js?v=10";
+} from "./lib/geo.js?v=13";
+import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey, norm } from "./lib/ingest.js?v=13";
+import { pivot, totals } from "./lib/pivot.js?v=13";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -116,7 +116,7 @@ const nf = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 const nfCompact = new Intl.NumberFormat("vi-VN", { notation: "compact", maximumFractionDigits: 1 });
 const pf = new Intl.NumberFormat("vi-VN", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pf0 = new Intl.NumberFormat("vi-VN", { style: "percent", maximumFractionDigits: 0 });
-const pf2 = new Intl.NumberFormat("vi-VN", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nfRaw = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 const fmt = (n) => nf.format(n);
 const fmtShort = (n) => (Math.abs(n) >= 10000 ? nfCompact.format(n) : nf.format(n));
 const esc = (s) =>
@@ -321,9 +321,8 @@ function rebuild() {
   }
   const hasCol = (field) => state.files.some((f) => f.cols[field] >= 0);
   state.has = Object.fromEntries(
-    ["topic", "subject", "channel", "views", "engagement", "date", "noun1", "noun2", "nature", "translation"].map((k) => [k, hasCol(k)])
+    ["topic", "subject", "channel", "views", "engagement", "date", "noun1", "noun2", "nature", "translation", "region"].map((k) => [k, hasCol(k)])
   );
-  state.has.engagement ||= (hasCol("likes") || hasCol("comments")) && hasCol("views");
 
   let records = all;
   state.duplicates = 0;
@@ -420,14 +419,13 @@ const FIELDS = [
   ["vph", "View/giờ (VPH)", "(không có)"],
   ["channel", "Kênh", "(không có)"],
   ["views", "Lượt xem", "(không có)"],
-  ["likes", "Like", "(không có)"],
-  ["comments", "Bình luận", "(không có)"],
-  ["engagement", "Tương tác (cột có sẵn)", "(không có)"],
+  ["engagement", "Tương tác", "(không có)"],
   ["date", "Ngày đăng", "(không có)"],
   ["translation", "Bản dịch tiếng Việt", "(dịch tự động khi trỏ chuột)"],
   ["country", "Quốc gia", "(tự tìm từ tiêu đề)"],
   ["continent", "Châu lục", "(theo quốc gia)"],
   ["link", "Link video", "(không có)"],
+  ["region", "Khu vực", "(không có)"],
   ["noun1", "Danh từ 1", "(không có)"],
   ["noun2", "Danh từ 2", "(không có)"],
   ["nature", "Tính chất", "(không có)"],
@@ -635,7 +633,8 @@ const LIB_COLS = [
   { id: "subject", label: "Chủ thể chính", w: 112, need: "subject", text: (r) => (r.subjectKey === BLANK ? "" : r.subjectLabel), filter: "subject" },
   { id: "country", label: "Quốc gia", w: 108, text: (r) => r.country, filter: "country" },
   { id: "continent", label: "Châu lục", w: 86, text: (r) => r.continent, filter: "continent" },
-  { id: "noun1", label: "Danh từ 1", w: 100, extra: true, text: (r) => r.noun1 },
+  { id: "region", label: "Khu vực", w: 100, need: "region", text: (r) => r.region },
+  { id: "noun1", label: "Danh từ 1", w: 100, need: "noun1", text: (r) => r.noun1 },
   { id: "noun2", label: "Danh từ 2", w: 100, extra: true, text: (r) => r.noun2 },
   { id: "nature", label: "Tính chất", w: 100, extra: true, text: (r) => r.nature },
 ];
@@ -648,7 +647,7 @@ function libraryRecords() {
   if (els.reviewOnly.checked) recs = recs.filter((r) => r.countryKey === "UNK");
   if (q)
     recs = recs.filter((r) =>
-      norm(`${r.title} ${r.translation} ${r.channel} ${r.topicLabel} ${r.subjectLabel} ${r.country} ${r.noun1} ${r.noun2} ${r.nature}`).includes(q)
+      norm(`${r.title} ${r.translation} ${r.channel} ${r.topicLabel} ${r.subjectLabel} ${r.country} ${r.region} ${r.noun1} ${r.noun2} ${r.nature}`).includes(q)
     );
   const col = LIB_BY_ID[state.libSort.by] || LIB_BY_ID.vph;
   const s = state.libSort.dir === "asc" ? 1 : -1;
@@ -671,7 +670,7 @@ function renderLibrary() {
   const cols = libCols();
   const LIMIT = state.libraryLimit;
   els.libraryCount.textContent = `(${fmt(recs.length)})`;
-  els.extraBtn.textContent = state.showExtra ? "Ẩn bớt" : "Xem thêm: Danh từ 1 · Danh từ 2 · Tính chất";
+  els.extraBtn.textContent = state.showExtra ? "Ẩn bớt" : "Xem thêm: Danh từ 2 · Tính chất";
   els.extraBtn.setAttribute("aria-pressed", String(state.showExtra));
   COUNTRY_OPTIONS ??= countryList().map((c) => `<option value="${c.code}">${esc(c.name)}</option>`).join("");
 
@@ -713,9 +712,10 @@ function renderLibrary() {
       case "views":
         return r.views === null ? `<span class="muted">–</span>` : fmt(r.views);
       case "engagement": {
-        if (r.engagement === null) return `<span class="muted">–</span>`;
-        const how = r.likes !== null || r.comments !== null ? `(${fmt(r.likes || 0)} like + ${fmt(r.comments || 0)} bình luận) / ${fmt(r.views)} view` : "Theo cột Tương tác trong file";
-        return `<span title="${how}">${pf2.format(r.engagement)}</span>`;
+        // Hiện đúng giá trị trong file, không tính toán.
+        const v = r.engagementRaw;
+        if (v === null || v === undefined || String(v).trim() === "") return `<span class="muted">–</span>`;
+        return typeof v === "number" ? nfRaw.format(v) : esc(String(v).trim());
       }
       case "vph":
         return r.vph === null ? `<span class="muted">${esc(r.vphRaw || "–")}</span>` : fmt(r.vph);
@@ -1132,7 +1132,7 @@ els.exportBtn.addEventListener("click", () => {
   );
   const recs = libraryRecords();
   const detail = [
-    ["Video", "Bản dịch", "Link video", "Kênh", "Ngày đăng", "Số ngày đã đăng", "Lượt xem", "Like", "Bình luận", "Tương tác (Like+BL)/view", "VPH", "Tuyến đề", "Chủ thể chính", "Quốc gia", "Châu lục", "Danh từ 1", "Danh từ 2", "Tính chất", "Nguồn quốc gia", "File", "Dòng"],
+    ["Video", "Bản dịch", "Link video", "Kênh", "Ngày đăng", "Số ngày đã đăng", "Lượt xem", "Tương tác", "VPH", "Tuyến đề", "Chủ thể chính", "Quốc gia", "Châu lục", "Khu vực", "Danh từ 1", "Danh từ 2", "Tính chất", "Nguồn quốc gia", "File", "Dòng"],
     ...recs.map((r) => [
       r.title,
       r.translation || trCache.get(r.title) || "",
@@ -1141,14 +1141,13 @@ els.exportBtn.addEventListener("click", () => {
       r.published === null ? r.publishedRaw : fmtDateTime(r.published),
       r.published === null ? "" : Math.floor(ageDays(r.published)),
       r.views ?? "",
-      r.likes ?? "",
-      r.comments ?? "",
-      r.engagement ?? "",
+      r.engagementRaw ?? "",
       r.vph ?? r.vphRaw ?? "",
       r.topicKey === BLANK ? "" : r.topicLabel,
       r.subjectKey === BLANK ? "" : r.subjectLabel,
       r.country,
       r.continent,
+      r.region,
       r.noun1,
       r.noun2,
       r.nature,
@@ -1171,12 +1170,7 @@ els.exportBtn.addEventListener("click", () => {
     c0 += b[0].length + 1;
   }
   const ws2 = XLSX.utils.aoa_to_sheet(detail);
-  const engCol = detail[0].indexOf("Tương tác (Like+BL)/view");
-  for (let r = 1; r < detail.length; r++) {
-    const cell = ws2[XLSX.utils.encode_cell({ r, c: engCol })];
-    if (cell && typeof cell.v === "number") cell.z = "0.00%";
-  }
-  ws2["!cols"] = [60, 60, 44, 22, 16, 10, 12, 10, 10, 14, 10, 24, 20, 20, 16, 16, 16, 16, 18, 24, 6].map((wch) => ({ wch }));
+  ws2["!cols"] = [60, 60, 44, 22, 16, 10, 12, 12, 10, 24, 20, 20, 16, 18, 16, 16, 16, 18, 24, 6].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp");
   XLSX.utils.book_append_sheet(wb, ws2, "Chi tiết");
   XLSX.writeFile(wb, `phan-tich-tuyen-de-${new Date().toISOString().slice(0, 10)}.xlsx`);
