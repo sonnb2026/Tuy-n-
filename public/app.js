@@ -21,7 +21,7 @@ import {
   UNKNOWN_COUNTRY,
   WORLDWIDE_COUNTRY,
 } from "./lib/geo.js?v=13";
-import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey, norm } from "./lib/ingest.js?v=13";
+import { findHeaderRow, detectColumns, buildRecords, dedupeRecords, scoreSheet, labelKey, cleanLabel, norm } from "./lib/ingest.js?v=13";
 import { pivot, totals } from "./lib/pivot.js?v=13";
 
 const $ = (id) => document.getElementById(id);
@@ -66,6 +66,7 @@ const SPECIAL_GEO = new Set(["UNK", "MULTI", "WW"]);
 const ROWS_PER_VIEW = 7; // số dòng hiện trong 1 lần cuộn của mỗi bảng
 const PAGE = 100;
 const DAY = 86400000;
+const TOPIC_OV_KEY = "tuyende:topic-overrides";
 
 // Nhóm theo số ngày đã đăng (số nguyên, tính theo giờ thực lúc dựng bảng).
 const AGE_BUCKETS = [
@@ -107,6 +108,8 @@ const state = {
   showExtra: false,
   overrides: loadOverrides(),
   editingCountry: null,
+  topicOverrides: loadJson(TOPIC_OV_KEY),
+  editingTopic: null,
   libraryLimit: PAGE,
 };
 let fileSeq = 0;
@@ -149,6 +152,28 @@ function ageTitle(t) {
   const d = Math.floor(ms / DAY);
   const h = Math.floor((ms % DAY) / 3600000);
   return `Đã đăng ${d} ngày ${h} giờ (lúc ${fmtDateTime(t)})`;
+}
+
+// Tuyến đề sửa tay: { khoá video: "tên tuyến mới" } (chuỗi rỗng = để trống). Lưu trên trình duyệt này.
+function loadJson(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "{}");
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+function saveTopicOverrides() {
+  try {
+    localStorage.setItem(TOPIC_OV_KEY, JSON.stringify(state.topicOverrides));
+  } catch {
+    // trình duyệt chặn bộ nhớ -> sửa tay chỉ giữ trong phiên này
+  }
+}
+// Gắn tuyến đề sửa tay vào video (trước bước lọc "Chỉ tính video đã có tuyến đề").
+function applyTopicOverride(r) {
+  if (!Object.prototype.hasOwnProperty.call(state.topicOverrides, r.key)) return r;
+  return { ...r, topicFile: r.topicRaw, topicRaw: cleanLabel(state.topicOverrides[r.key]), topicEdited: true };
 }
 
 function loadOverrides() {
@@ -331,6 +356,7 @@ function rebuild() {
     records = d.records;
     state.duplicates = d.duplicates;
   }
+  records = records.map(applyTopicOverride);
   state.excludedNoTopic = 0;
   if (state.has.topic && els.onlyTopic.checked) {
     const kept = records.filter((r) => r.topicRaw);
@@ -734,8 +760,15 @@ function renderLibrary() {
       case "continent":
         return filterBtn("continent", r.continentKey, r.continent, SPECIAL_GEO.has(r.continentKey));
       case "topic": {
+        if (state.editingTopic === r.key) {
+          const cur = r.topicKey === BLANK ? "" : r.topicRaw;
+          return `<input type="text" class="mini topic-input" list="topicOptions" data-topic-key="${esc(r.key)}" value="${esc(cur)}" placeholder="Nhập tuyến đề…" aria-label="Sửa tuyến đề" autocomplete="off">`;
+        }
         const color = state.topicColors.get(r.topicKey);
-        return filterBtn("topic", r.topicKey, r.topicLabel, r.topicKey === BLANK, color);
+        const mark = r.topicEdited
+          ? `<span class="mark mark--edit" title="Đã sửa tay. Trong file: ${esc(r.topicFile || "(trống)")}">sửa</span><button type="button" class="edit-btn" data-reset-topic="${esc(r.key)}" title="Trả về tuyến đề trong file: ${esc(r.topicFile || "(trống)")}" aria-label="Trả về tuyến đề trong file">↺</button>`
+          : "";
+        return `${filterBtn("topic", r.topicKey, r.topicLabel, r.topicKey === BLANK, color)}${mark}<button type="button" class="edit-btn" data-edit-topic="${esc(r.key)}" title="Sửa tuyến đề" aria-label="Sửa tuyến đề">✎</button>`;
       }
       case "subject":
         return filterBtn("subject", r.subjectKey, r.subjectLabel, r.subjectKey === BLANK);
@@ -752,8 +785,17 @@ function renderLibrary() {
       .map((r) => `<tr>${cols.map((c) => `<td class="c-${c.id}${c.num ? " num" : ""}${c.extra ? " is-extra" : ""}">${cellHtml(c, r)}</td>`).join("")}</tr>`)
       .join("") || `<tr><td colspan="${cols.length}" class="muted">Không có video nào khớp.</td></tr>`;
 
+  // Gợi ý khi sửa tuyến đề: các tuyến đang có (gõ tên mới cũng được).
+  const topicOptions = state.editingTopic
+    ? `<datalist id="topicOptions">${[...new Map(state.records.filter((r) => r.topicKey !== BLANK).map((r) => [r.topicKey, r.topicLabel])).values()]
+        .sort((a, b) => a.localeCompare(b, "vi"))
+        .map((l) => `<option value="${esc(l)}"></option>`)
+        .join("")}</datalist>`
+    : "";
   els.libraryTable.classList.toggle("with-extra", state.showExtra);
   els.libraryTable.innerHTML = `<colgroup>${colgroup}</colgroup><thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+  document.getElementById("topicOptions")?.remove();
+  if (topicOptions) document.body.insertAdjacentHTML("beforeend", topicOptions);
   sizeColumns();
   // Chỉ vẽ 100 dòng mỗi lần cho nhẹ; bấm "Hiện thêm" để xem tiếp.
   const more = recs.length - LIMIT;
@@ -1058,6 +1100,22 @@ els.libraryTable.addEventListener("click", (e) => {
     els.libraryScroll.scrollTop = 0;
     return;
   }
+  const editTopic = e.target.closest("[data-edit-topic]");
+  if (editTopic) {
+    state.editingTopic = editTopic.dataset.editTopic;
+    renderLibrary();
+    const input = els.libraryTable.querySelector("input[data-topic-key]");
+    input?.focus();
+    input?.select();
+    return;
+  }
+  const resetTopic = e.target.closest("[data-reset-topic]");
+  if (resetTopic) {
+    delete state.topicOverrides[resetTopic.dataset.resetTopic];
+    saveTopicOverrides();
+    rebuild();
+    return;
+  }
   const edit = e.target.closest("[data-edit-country]");
   if (edit) {
     state.editingCountry = edit.dataset.editCountry;
@@ -1094,7 +1152,39 @@ els.libraryTable.addEventListener("change", (e) => {
   state.editingCountry = null;
   rebuild();
 });
+// Lưu tuyến đề sửa tay rồi dựng lại toàn bộ bảng. Gõ đúng như trong file = bỏ sửa tay.
+function commitTopic(key, value) {
+  if (state.editingTopic !== key) return; // đã lưu / huỷ rồi (Enter rồi mất focus)
+  state.editingTopic = null;
+  const rec = state.byKey.get(key);
+  const fileVal = rec ? (rec.topicEdited ? rec.topicFile : rec.topicRaw) || "" : "";
+  const v = cleanLabel(value);
+  if (v === fileVal) delete state.topicOverrides[key];
+  else state.topicOverrides[key] = v;
+  saveTopicOverrides();
+  rebuild();
+}
+els.libraryTable.addEventListener("keydown", (e) => {
+  const input = e.target.closest("input[data-topic-key]");
+  if (!input) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    commitTopic(input.dataset.topicKey, input.value);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    state.editingTopic = null;
+    renderLibrary();
+  }
+});
 els.libraryTable.addEventListener("focusout", (e) => {
+  const input = e.target.closest("input[data-topic-key]");
+  if (input) {
+    // Chờ một chút: chọn gợi ý trong danh sách thả xuống có thể làm ô mất focus trong chốc lát.
+    setTimeout(() => {
+      if (document.activeElement !== input && input.isConnected) commitTopic(input.dataset.topicKey, input.value);
+    }, 150);
+    return;
+  }
   const s = e.target.closest("select[data-key]");
   if (s && state.editingCountry) {
     setTimeout(() => {
